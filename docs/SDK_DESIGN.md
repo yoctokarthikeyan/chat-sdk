@@ -102,6 +102,12 @@ await client.updateUser({
   metadata: { department: 'Engineering' }
 });
 
+// Deactivate user
+await client.deactivateUser('user-123');
+
+// Reactivate user
+await client.reactivateUser('user-123');
+
 // Get user by ID
 const user = await client.getUser('user-123');
 
@@ -119,6 +125,19 @@ await client.unblockUser('user-456');
 
 // Get blocked users
 const blockedUsers = await client.getBlockedUsers();
+
+// Register device for push notifications
+await client.registerDevice({
+  deviceId: 'device-123',
+  pushProvider: 'fcm',
+  pushToken: 'token-xyz'
+});
+
+// Get user devices
+const devices = await client.getDevices();
+
+// Remove device
+await client.removeDevice('device-123');
 ```
 
 ### 2.3 Channel Operations
@@ -142,11 +161,33 @@ const channels = await client.channels.query({
   limit: 20
 });
 
+// Create distinct channel (auto-dedupe for DMs)
+const dmChannel = await client.channels.create({
+  type: 'direct',
+  members: ['user-1', 'user-2'],
+  distinct: true // Prevents duplicate DM channels
+});
+
 // Update channel
 await channel.update({
   name: 'New Team Chat',
   description: 'Updated description'
 });
+
+// Freeze channel (read-only mode)
+await channel.freeze();
+
+// Unfreeze channel
+await channel.unfreeze();
+
+// Truncate channel (clear history)
+await channel.truncate();
+
+// Hide channel (user-specific)
+await channel.hide();
+
+// Show channel
+await channel.show();
 
 // Delete channel
 await channel.delete();
@@ -156,6 +197,27 @@ await channel.addMembers(['user-4', 'user-5']);
 
 // Remove members
 await channel.removeMember('user-3');
+
+// Ban user from channel
+await channel.banUser('user-3', {
+  reason: 'Spam',
+  timeout: 3600 // seconds
+});
+
+// Unban user
+await channel.unbanUser('user-3');
+
+// Shadow ban user
+await channel.shadowBan('user-3');
+
+// Mute user in channel
+await channel.muteUser('user-3');
+
+// Unmute user
+await channel.unmuteUser('user-3');
+
+// Get channel watchers (currently viewing)
+const watchers = await channel.getWatchers();
 
 // Leave channel
 await channel.leave();
@@ -170,6 +232,12 @@ const message = await channel.sendMessage({
   mentions: ['user-1']
 });
 
+// Send silent message (no push notification)
+const silentMessage = await channel.sendMessage({
+  text: 'Background update',
+  silent: true
+});
+
 // Send message with attachment
 const message = await channel.sendMessage({
   text: 'Check this out!',
@@ -177,6 +245,18 @@ const message = await channel.sendMessage({
     type: 'image',
     url: 'https://example.com/image.jpg'
   }]
+});
+
+// Send quoted reply
+const quotedReply = await channel.sendMessage({
+  text: 'I agree!',
+  quotedMessageId: 'message-123'
+});
+
+// Schedule message
+const scheduledMessage = await channel.sendMessage({
+  text: 'Reminder',
+  scheduledFor: new Date('2024-12-25T10:00:00Z')
 });
 
 // Upload file
@@ -188,13 +268,38 @@ const attachment = await client.uploadFile({
   }
 });
 
+// Save draft message
+await channel.saveDraft({
+  text: 'Work in progress...'
+});
+
+// Get draft message
+const draft = await channel.getDraft();
+
 // Edit message
 await message.update({
   text: 'Updated message text'
 });
 
-// Delete message
+// Partial update message
+await message.partialUpdate({
+  metadata: { edited: true }
+});
+
+// Delete message (soft delete)
 await message.delete();
+
+// Hard delete message (permanent)
+await message.hardDelete();
+
+// Undelete message
+await message.undelete();
+
+// Pin message
+await message.pin();
+
+// Unpin message
+await message.unpin();
 
 // Reply to message (threading)
 await message.reply({
@@ -218,6 +323,16 @@ const results = await client.searchMessages({
   query: 'important',
   channelId: 'channel-id',
   limit: 20
+});
+
+// Translate message
+const translated = await message.translate('es');
+
+// Execute slash command
+await channel.sendMessage({
+  text: '/giphy hello',
+  command: 'giphy',
+  args: ['hello']
 });
 ```
 

@@ -30,6 +30,12 @@ Build a competitive Chat SDK that offers:
 - **[Cost Analysis](./docs/COST_ANALYSIS.md)** - Detailed cost breakdown and ROI projections
 - **[Implementation Roadmap](./docs/ROADMAP.md)** - 12-month development plan
 
+### Competitive Analysis
+- **[GetStream Feature Comparison](./docs/GETSTREAM_FEATURE_COMPARISON.md)** - Feature parity analysis with GetStream
+- **[Feature Updates Summary](./docs/FEATURE_UPDATES_SUMMARY.md)** - Summary of features added for GetStream parity
+- **[Documentation Update Summary](./docs/DOCUMENTATION_UPDATE_SUMMARY.md)** - Complete documentation update log
+- **[Visual Diagrams](./docs/DIAGRAMS.md)** - Architecture and flow diagrams
+
 ## ✨ Key Features
 
 ### Core Features (MVP)

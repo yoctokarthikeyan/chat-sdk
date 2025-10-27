@@ -8,9 +8,13 @@
 - JWT-based authentication
 - User registration and login
 - Token refresh mechanism
+- Token revocation (by user or application)
 - Multi-device support
 - Session management
-- Logout and token revocation
+- Logout and token invalidation
+- Anonymous users (guest access without registration)
+- Guest users (temporary access with limited permissions)
+- Developer tokens (for testing and development)
 
 #### **User Profiles**
 ```typescript
@@ -39,9 +43,13 @@ interface UserProfile {
 - Profile updates
 - Avatar upload
 - User search
-- User blocking
+- User blocking/unblocking
 - User reporting
 - Privacy settings
+- User deactivation (soft delete)
+- User reactivation
+- Device management (register/remove devices)
+- Multi-tenant teams support
 
 ---
 
@@ -92,19 +100,28 @@ interface UserProfile {
 
 #### **Channel Operations**
 - Create channels
+- Create distinct channels (auto-dedupe for DMs)
 - Update channel metadata
 - Delete channels
 - Archive/unarchive channels
+- Freeze/unfreeze channels (read-only mode)
+- Truncate channel (clear message history)
+- Hide/show channels (user-specific visibility)
 - Channel search
 - Channel discovery (public channels)
+- Query channels with filters
 
 #### **Member Management**
 - Add members
 - Remove members
-- Invite members
+- Invite members (with accept/reject flow)
 - Leave channel
-- Member roles (owner, admin, member)
-- Member permissions
+- Member roles (owner, admin, moderator, member)
+- Custom roles and permissions
+- Ban/unban users from channel
+- Shadow ban users (messages hidden from others)
+- Mute/unmute users in channel
+- Query banned users
 
 #### **Channel Metadata**
 ```typescript
@@ -123,7 +140,13 @@ interface Channel {
     muteNotifications: boolean;
     allowInvites: boolean;
     allowFileSharing: boolean;
+    isFrozen: boolean; // Read-only mode
+    slowMode: number; // Seconds between messages
+    cooldown: number; // Channel-wide rate limit
   };
+  watchers: string[]; // Users currently viewing channel
+  isDistinct: boolean; // Auto-dedupe for DMs
+  isHidden: boolean; // User-specific visibility
 }
 ```
 
@@ -168,22 +191,61 @@ interface Channel {
 }
 ```
 
+**Silent Messages**
+```typescript
+{
+  type: 'silent',
+  text: 'Background update',
+  silent: true // No push notification sent
+}
+```
+
+**Pending Messages**
+```typescript
+{
+  type: 'pending',
+  text: 'Awaiting moderation',
+  status: 'pending' // Requires approval
+}
+```
+
+**Draft Messages**
+```typescript
+{
+  type: 'draft',
+  text: 'Work in progress...',
+  isDraft: true // Saved locally, not sent
+}
+```
+
 #### **Message Operations**
 - Send messages
+- Send silent messages (no notifications)
 - Edit messages
 - Delete messages (soft delete)
+- Hard delete messages (permanent removal)
+- Undelete messages (restore deleted)
+- Partial update messages (update specific fields)
 - Reply to messages (threading)
+- Quoted reply (reply with context)
 - Forward messages
-- Pin messages
+- Pin/unpin messages
 - Search messages
+- Save draft messages
+- Schedule messages for later
+- Set message reminders
 
 #### **Message Features**
 - **Mentions**: @username notifications
 - **Links**: Auto-detection and preview
+- **URL Enrichment**: Auto-generate link previews
 - **Emojis**: Unicode emoji support
 - **Formatting**: Markdown support (optional)
 - **Code blocks**: Syntax highlighting
 - **Quotes**: Reply with context
+- **Commands**: Slash commands (/giphy, /poll, etc.)
+- **Giphy Integration**: GIF search and sharing
+- **Message Status**: Pending, approved, rejected
 
 #### **Message Structure**
 ```typescript
@@ -298,11 +360,15 @@ await channel.sendMessage({
 
 #### **Media Features**
 - **Image compression**: Auto-compress before upload
+- **Image resizing**: Auto-resize to multiple dimensions
 - **Thumbnail generation**: Auto-generate thumbnails
-- **Progress tracking**: Upload/download progress
-- **CDN delivery**: Fast global delivery
-- **Signed URLs**: Secure access to media
-- **Link previews**: Auto-generate for URLs
+- **Progress tracking**: Real-time upload/download progress
+- **Resumable uploads**: Resume interrupted large file uploads
+- **CDN delivery**: Fast global delivery via CloudFront
+- **Signed URLs**: Secure time-limited access to media
+- **Link previews**: Auto-generate rich previews for URLs
+- **File type validation**: Restrict allowed file types
+- **Virus scanning**: Scan uploads for malware
 
 #### **File Size Limits**
 ```
@@ -337,6 +403,22 @@ Enterprise:
 - **Email**: Digest emails
 - **SMS**: Optional add-on
 
+#### **Device Management**
+```typescript
+// Register device for push notifications
+await client.registerDevice({
+  deviceId: 'device-123',
+  pushProvider: 'fcm', // or 'apns'
+  pushToken: 'fcm-token-xyz'
+});
+
+// List user devices
+const devices = await client.getDevices();
+
+// Remove device
+await client.removeDevice('device-123');
+```
+
 #### **Notification Preferences**
 ```typescript
 interface NotificationSettings {
@@ -362,6 +444,10 @@ interface NotificationSettings {
 - Priority: Important messages first
 - Rich content: Images, actions in notifications
 - Deep linking: Open specific channel/message
+- Custom templates: Customize notification text and layout
+- A/B testing: Test different notification formats
+- Delivery tracking: Track notification delivery status
+- Test notifications: Send test push to specific devices
 
 ---
 
@@ -370,18 +456,24 @@ interface NotificationSettings {
 ### 2.1 Moderation & Safety
 
 #### **Content Moderation**
-- **Profanity filter**: Block offensive words
+- **Profanity filter**: Block offensive words with custom word lists
 - **Spam detection**: ML-based spam detection
 - **Link filtering**: Block malicious links
-- **Image moderation**: AI-powered image scanning
-- **Auto-moderation rules**: Custom rules
+- **Image moderation**: AI-powered NSFW and inappropriate content detection
+- **Auto-moderation rules**: Custom rules and triggers
+- **Block lists**: Maintain lists of blocked words and phrases
+- **Review queue**: Queue flagged content for manual review
+- **Moderation webhooks**: Real-time moderation events
 
 #### **User Moderation**
-- **User banning**: Temporary or permanent
-- **User muting**: Prevent sending messages
-- **Shadow banning**: Hide user's messages
+- **User banning**: Temporary or permanent bans
+- **Channel-level bans**: Ban users from specific channels
+- **User muting**: Prevent sending messages temporarily
+- **Shadow banning**: Hide user's messages from others (user unaware)
 - **IP blocking**: Block by IP address
-- **Rate limiting**: Prevent abuse
+- **Rate limiting**: Prevent abuse and spam
+- **Query banned users**: List all banned users with filters
+- **Ban expiration**: Auto-unban after specified time
 
 #### **Reporting System**
 ```typescript
@@ -399,11 +491,15 @@ await user.report({
 ```
 
 #### **Moderation Dashboard**
-- View reported content
-- Review flagged messages
+- View reported content with context
+- Review queue for flagged messages
+- Approve/reject pending messages
 - Manage banned users
-- Moderation analytics
-- Audit logs
+- Manage block lists
+- Moderation analytics and trends
+- Moderator activity logs
+- Audit logs for compliance
+- Bulk moderation actions
 
 ---
 
@@ -524,7 +620,201 @@ await channel.sendMessage({
 
 ---
 
-### 2.4 Analytics & Insights
+### 2.4 Multi-Tenancy & Teams
+
+#### **Multi-Tenant Architecture**
+```typescript
+// Create team/tenant
+const team = await client.createTeam({
+  name: 'Acme Corp',
+  members: ['user1', 'user2']
+});
+
+// Assign user to team
+await client.assignUserToTeam({
+  userId: 'user-123',
+  teamId: 'team-456'
+});
+
+// Query channels by team
+const channels = await client.queryChannels({
+  filter: { team: 'team-456' }
+});
+```
+
+#### **Team Features**
+- **Data Isolation**: Complete data separation between teams
+- **Team-based Permissions**: Permissions scoped to teams
+- **Team Roles**: Custom roles per team
+- **Team Search**: Search users/channels within team
+- **Team Analytics**: Analytics per team
+- **Cross-team Messaging**: Optional inter-team communication
+
+#### **Use Cases**
+- SaaS multi-tenancy
+- Enterprise departments
+- Workspace isolation
+- Customer segregation
+- Compliance requirements
+
+---
+
+### 2.5 Webhooks & Integrations
+
+#### **Webhook Types**
+
+**Before Message Send Hook**
+```typescript
+// Intercept messages before sending
+// Use case: Content filtering, validation, enrichment
+POST https://your-server.com/webhooks/before-message-send
+{
+  "message": {
+    "text": "Hello world",
+    "userId": "user-123",
+    "channelId": "channel-456"
+  }
+}
+
+// Response: Approve, reject, or modify
+{
+  "approved": true,
+  "message": {
+    "text": "Hello world [filtered]"
+  }
+}
+```
+
+**Push Webhook (All Events)**
+```typescript
+// Receive all chat events
+POST https://your-server.com/webhooks/push
+{
+  "event": "message.new",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "data": {
+    "message": { ... },
+    "channel": { ... },
+    "user": { ... }
+  }
+}
+```
+
+**Custom Action Handler**
+```typescript
+// Handle custom slash commands
+POST https://your-server.com/webhooks/custom-action
+{
+  "command": "/ticket",
+  "args": ["create", "Bug in login"],
+  "userId": "user-123",
+  "channelId": "channel-456"
+}
+```
+
+#### **Webhook Features**
+- **Signature Verification**: HMAC-SHA256 signatures
+- **Retry Logic**: Automatic retry with exponential backoff
+- **Webhook Testing**: Test webhooks from dashboard
+- **Event Filtering**: Subscribe to specific events only
+- **Webhook Logs**: View webhook delivery history
+- **Timeout Configuration**: Configurable timeout limits
+
+#### **Supported Events**
+- message.new, message.updated, message.deleted
+- channel.created, channel.updated, channel.deleted
+- user.presence.changed, user.banned, user.updated
+- member.added, member.removed
+- reaction.new, reaction.deleted
+- typing.start, typing.stop
+
+---
+
+### 2.6 Campaign & Bulk Messaging
+
+#### **Campaign API**
+```typescript
+// Send bulk messages to multiple channels
+const campaign = await client.createCampaign({
+  name: 'Product Launch Announcement',
+  message: {
+    text: 'New feature available!',
+    attachments: [...]
+  },
+  targets: {
+    channels: ['channel-1', 'channel-2'],
+    users: ['user-1', 'user-2']
+  },
+  schedule: '2024-01-15T10:00:00Z'
+});
+
+// Track campaign delivery
+const stats = await campaign.getStats();
+// { sent: 100, delivered: 98, read: 45 }
+```
+
+#### **Bulk Operations**
+- Send messages to multiple channels
+- Bulk user imports
+- Bulk channel creation
+- Scheduled campaigns
+- Campaign analytics
+- A/B testing campaigns
+
+---
+
+### 2.7 Import & Export
+
+#### **Data Import**
+```typescript
+// Import messages from external system
+await client.importMessages({
+  channelId: 'channel-123',
+  messages: [
+    {
+      text: 'Historical message',
+      userId: 'user-1',
+      createdAt: '2023-01-01T00:00:00Z'
+    }
+  ]
+});
+
+// Import users
+await client.importUsers({
+  users: [
+    { id: 'user-1', name: 'John', email: 'john@example.com' }
+  ]
+});
+```
+
+#### **Data Export**
+```typescript
+// Export channel data (GDPR compliance)
+const export = await client.exportChannel({
+  channelId: 'channel-123',
+  format: 'json', // or 'csv'
+  includeMessages: true,
+  includeMedia: true
+});
+
+// Export user data
+const userData = await client.exportUserData({
+  userId: 'user-123'
+});
+```
+
+#### **Export Features**
+- Full channel history export
+- User data export (GDPR)
+- Scheduled exports
+- Multiple formats (JSON, CSV, PDF)
+- Include/exclude media files
+- Encrypted exports
+- Export to S3/cloud storage
+
+---
+
+### 2.8 Analytics & Insights
 
 #### **User Analytics**
 - Daily/Monthly active users

@@ -30,7 +30,12 @@ This roadmap outlines a 12-month plan to build and launch a production-ready Cha
 - [ ] User authentication (JWT)
 - [ ] User registration and login APIs
 - [ ] Token refresh mechanism
+- [ ] Token revocation system
+- [ ] Anonymous and guest user support
+- [ ] Developer tokens for testing
 - [ ] Basic user profile APIs
+- [ ] User deactivation/reactivation
+- [ ] Device management APIs
 - [ ] API rate limiting
 - [ ] Error handling middleware
 - [ ] Request validation
@@ -39,6 +44,7 @@ This roadmap outlines a 12-month plan to build and launch a production-ready Cha
 - Authentication system working
 - User management APIs
 - Database migrations
+- Token management complete
 
 ---
 
@@ -47,18 +53,35 @@ This roadmap outlines a 12-month plan to build and launch a production-ready Cha
 #### Week 1-2: Messaging Backend
 - [ ] Channel model and APIs
 - [ ] Create/update/delete channels
+- [ ] Distinct channels (auto-dedupe for DMs)
+- [ ] Frozen channels (read-only mode)
+- [ ] Channel truncation
+- [ ] Hide/show channels
 - [ ] Channel member management
+- [ ] Ban/unban users from channels
+- [ ] Shadow ban implementation
+- [ ] Invite accept/reject flow
 - [ ] Message model and APIs
 - [ ] Send/receive messages
+- [ ] Silent messages (no notifications)
+- [ ] Pending messages (moderation queue)
+- [ ] Draft messages
 - [ ] Message history pagination
 - [ ] Message editing and deletion
+- [ ] Hard delete vs soft delete
+- [ ] Undelete messages
+- [ ] Partial message updates
+- [ ] Quoted replies
 - [ ] File upload to S3
 - [ ] Media URL signing
+- [ ] Image resizing and thumbnails
+- [ ] Resumable uploads
 
 **Deliverables:**
 - REST APIs for channels and messages
 - File upload working
 - Message persistence
+- Advanced channel features
 
 #### Week 3-4: Real-time Layer
 - [ ] WebSocket server setup (Socket.io)
@@ -67,14 +90,18 @@ This roadmap outlines a 12-month plan to build and launch a production-ready Cha
 - [ ] Real-time message broadcasting
 - [ ] Typing indicators
 - [ ] User presence tracking
+- [ ] Channel watchers (currently viewing)
 - [ ] Read receipts
 - [ ] Connection state management
 - [ ] Reconnection handling
+- [ ] Slow mode implementation
+- [ ] Channel cooldown
 
 **Deliverables:**
 - WebSocket server operational
 - Real-time messaging working
 - Presence and typing indicators
+- Rate limiting features
 
 ---
 
@@ -119,6 +146,9 @@ This roadmap outlines a 12-month plan to build and launch a production-ready Cha
 
 #### Week 1-2: Essential Features
 - [ ] Push notifications (FCM, APNS)
+- [ ] Device registration and management
+- [ ] Push notification templates
+- [ ] Test push notifications
 - [ ] Email notifications
 - [ ] Message reactions
 - [ ] Message mentions (@user)
@@ -126,12 +156,17 @@ This roadmap outlines a 12-month plan to build and launch a production-ready Cha
 - [ ] Message search
 - [ ] User blocking
 - [ ] Basic moderation (profanity filter)
+- [ ] Block lists
+- [ ] Moderation queue
 - [ ] Admin APIs
+- [ ] Slash commands (/giphy, /poll)
+- [ ] URL enrichment (link previews)
 
 **Deliverables:**
 - Push notifications working
 - Search functionality
 - Moderation tools
+- Command system
 
 #### Week 3-4: Testing & Documentation
 - [ ] Unit tests (80%+ coverage)
@@ -190,25 +225,42 @@ This roadmap outlines a 12-month plan to build and launch a production-ready Cha
 
 ---
 
-### Month 6: Analytics & Admin Tools
+### Month 6: Analytics, Webhooks & Multi-Tenancy
 
 #### Features
-- [ ] Analytics dashboard
-- [ ] Usage metrics tracking
-- [ ] User engagement analytics
-- [ ] Channel activity reports
-- [ ] Admin dashboard
-- [ ] User management UI
-- [ ] Channel management UI
-- [ ] Moderation dashboard
-- [ ] Audit logs
-- [ ] Webhooks system
-- [ ] Custom event tracking
+- [ ] **Multi-Tenancy & Teams**
+  - [ ] Team/tenant data model
+  - [ ] Team-based data isolation
+  - [ ] Team permissions and roles
+  - [ ] Team user management
+  - [ ] Team analytics
+- [ ] **Webhooks System**
+  - [ ] Before message send hook
+  - [ ] Push webhook (all events)
+  - [ ] Custom action handler
+  - [ ] Webhook signature verification
+  - [ ] Webhook retry logic
+  - [ ] Webhook testing tools
+  - [ ] Webhook logs and monitoring
+- [ ] **Analytics Dashboard**
+  - [ ] Usage metrics tracking
+  - [ ] User engagement analytics
+  - [ ] Channel activity reports
+  - [ ] Team-based analytics
+- [ ] **Admin Dashboard**
+  - [ ] User management UI
+  - [ ] Channel management UI
+  - [ ] Moderation dashboard
+  - [ ] Review queue UI
+  - [ ] Block list management
+  - [ ] Audit logs
+  - [ ] Custom event tracking
 
 **Deliverables:**
+- Multi-tenancy support
+- Complete webhook system
 - Analytics platform
 - Admin tools
-- Webhook system
 
 ---
 
@@ -245,21 +297,43 @@ This roadmap outlines a 12-month plan to build and launch a production-ready Cha
 
 ---
 
-### Month 8: Advanced Features
+### Month 8: Advanced Features & Campaigns
 
 #### Features
-- [ ] Message translation (Google Translate API)
-- [ ] Smart replies (OpenAI API)
-- [ ] AI-powered moderation
-- [ ] Advanced search (Elasticsearch)
-- [ ] Full-text search
-- [ ] Fuzzy matching
-- [ ] Search filters
-- [ ] Multi-language support
-- [ ] Localization (i18n)
-- [ ] RTL support
+- [ ] **Campaign & Bulk Messaging**
+  - [ ] Campaign API
+  - [ ] Bulk message sending
+  - [ ] Scheduled campaigns
+  - [ ] Campaign analytics
+  - [ ] A/B testing
+  - [ ] Target audience selection
+- [ ] **Import & Export**
+  - [ ] Bulk user import
+  - [ ] Message history import
+  - [ ] Channel data export
+  - [ ] User data export (GDPR)
+  - [ ] Scheduled exports
+  - [ ] Multiple export formats
+- [ ] **AI Features**
+  - [ ] Message translation (Google Translate API)
+  - [ ] Smart replies (OpenAI API)
+  - [ ] AI-powered content moderation
+  - [ ] Image moderation (NSFW detection)
+  - [ ] Sentiment analysis
+- [ ] **Advanced Search**
+  - [ ] Elasticsearch integration
+  - [ ] Full-text search
+  - [ ] Fuzzy matching
+  - [ ] Search filters
+  - [ ] Search analytics
+- [ ] **Internationalization**
+  - [ ] Multi-language support
+  - [ ] Localization (i18n)
+  - [ ] RTL support
 
 **Deliverables:**
+- Campaign system
+- Import/export tools
 - AI-powered features
 - Advanced search
 - Internationalization

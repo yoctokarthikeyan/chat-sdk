@@ -45,6 +45,9 @@
 - Retries and backoff
 - Job events and progress
 - TypeScript support
+- Webhook delivery queue
+- Campaign message distribution
+- Scheduled messages
 
 ### 1.3 Database Layer
 
@@ -60,8 +63,12 @@
 - In-memory performance
 - Pub/Sub messaging
 - Session storage
-- Rate limiting
+- Rate limiting & slow mode
 - Presence tracking
+- Token revocation list
+- Draft messages cache
+- Channel watchers tracking
+- Webhook retry queue
 
 **Time-Series: TimescaleDB**
 - Built on PostgreSQL
@@ -233,7 +240,83 @@
 
 ---
 
-## 4. Development Tools
+## 4. Third-Party Integrations
+
+### 4.1 AI & ML Services
+
+**OpenAI API**
+- Smart replies generation
+- Content moderation
+- Message translation
+- Sentiment analysis
+
+**Google Cloud Vision API**
+- Image moderation (NSFW detection)
+- OCR for images
+- Label detection
+
+**Google Translate API**
+- Real-time message translation
+- Multi-language support
+- 100+ languages
+
+### 4.2 Push Notification Services
+
+**Firebase Cloud Messaging (FCM)**
+- Android push notifications
+- Web push notifications
+- Topic-based messaging
+- Device group messaging
+
+**Apple Push Notification Service (APNS)**
+- iOS push notifications
+- Silent notifications
+- Rich notifications
+- Badge updates
+
+### 4.3 Communication Services
+
+**Twilio** (Optional)
+- SMS notifications
+- Phone verification
+- Voice calls integration
+
+**SendGrid**
+- Transactional emails
+- Email notifications
+- Email templates
+- Delivery tracking
+
+### 4.4 Analytics & Monitoring
+
+**Mixpanel / Amplitude**
+- User analytics
+- Event tracking
+- Funnel analysis
+- Retention metrics
+
+**Segment**
+- Data pipeline
+- Event routing
+- Multiple destinations
+- Data warehouse sync
+
+### 4.5 Content Delivery
+
+**Giphy API**
+- GIF search and sharing
+- Trending GIFs
+- Stickers support
+
+**Link Preview Services**
+- URL metadata extraction
+- Open Graph parsing
+- Twitter Card support
+- Rich link previews
+
+---
+
+## 5. Development Tools
 
 **Code Quality**
 - Linting: ESLint
@@ -255,7 +338,7 @@
 
 ---
 
-## 5. Recommended Production Stack
+## 6. Recommended Production Stack
 
 ```
 Backend:

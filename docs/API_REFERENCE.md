@@ -80,6 +80,58 @@ Authorization: Bearer {token}
 Response 204: No Content
 ```
 
+### Revoke Token
+```http
+POST /api/v1/auth/revoke
+Authorization: Bearer {token}
+Content-Type: application/json
+
+Request:
+{
+  "token": "token-to-revoke",
+  "revokeAll": false // Revoke all user tokens
+}
+
+Response 204: No Content
+```
+
+### Create Anonymous User
+```http
+POST /api/v1/auth/anonymous
+Content-Type: application/json
+
+Request:
+{
+  "deviceId": "device-123"
+}
+
+Response 201:
+{
+  "userId": "anon-user-123",
+  "token": "jwt-token",
+  "expiresIn": 3600
+}
+```
+
+### Create Guest User
+```http
+POST /api/v1/auth/guest
+Content-Type: application/json
+
+Request:
+{
+  "displayName": "Guest User",
+  "deviceId": "device-123"
+}
+
+Response 201:
+{
+  "userId": "guest-user-123",
+  "token": "jwt-token",
+  "expiresIn": 86400
+}
+```
+
 ### Get Current User
 ```http
 GET /api/v1/auth/me
@@ -207,9 +259,125 @@ Response 200:
 }
 ```
 
+### Deactivate User
+```http
+POST /api/v1/users/{userId}/deactivate
+Authorization: Bearer {token}
+
+Response 204: No Content
+```
+
+### Reactivate User
+```http
+POST /api/v1/users/{userId}/reactivate
+Authorization: Bearer {token}
+
+Response 204: No Content
+```
+
+### Register Device
+```http
+POST /api/v1/users/{userId}/devices
+Authorization: Bearer {token}
+Content-Type: application/json
+
+Request:
+{
+  "deviceId": "device-123",
+  "pushProvider": "fcm", // or "apns"
+  "pushToken": "fcm-token-xyz",
+  "platform": "android" // or "ios", "web"
+}
+
+Response 201:
+{
+  "deviceId": "device-123",
+  "registeredAt": "2024-01-15T10:00:00Z"
+}
+```
+
+### Get User Devices
+```http
+GET /api/v1/users/{userId}/devices
+Authorization: Bearer {token}
+
+Response 200:
+{
+  "devices": [
+    {
+      "deviceId": "device-123",
+      "pushProvider": "fcm",
+      "platform": "android",
+      "registeredAt": "2024-01-15T10:00:00Z",
+      "lastActiveAt": "2024-01-15T12:00:00Z"
+    }
+  ]
+}
+```
+
+### Remove Device
+```http
+DELETE /api/v1/users/{userId}/devices/{deviceId}
+Authorization: Bearer {token}
+
+Response 204: No Content
+```
+
 ---
 
-## 3. Channels
+## 3. Teams (Multi-Tenancy)
+
+### Create Team
+```http
+POST /api/v1/teams
+Authorization: Bearer {token}
+Content-Type: application/json
+
+Request:
+{
+  "name": "Acme Corp",
+  "members": ["user-1", "user-2"]
+}
+
+Response 201:
+{
+  "id": "team-123",
+  "name": "Acme Corp",
+  "createdAt": "2024-01-15T10:00:00Z"
+}
+```
+
+### Assign User to Team
+```http
+POST /api/v1/teams/{teamId}/members
+Authorization: Bearer {token}
+Content-Type: application/json
+
+Request:
+{
+  "userId": "user-123",
+  "role": "member"
+}
+
+Response 200:
+{
+  "teamId": "team-123",
+  "userId": "user-123",
+  "role": "member"
+}
+```
+
+### Remove User from Team
+```http
+DELETE /api/v1/teams/{teamId}/members/{userId}
+Authorization: Bearer {token}
+
+Response 204: No Content
+```
+
+---
+
+## 4. Channels
 
 ### Create Channel
 ```http
