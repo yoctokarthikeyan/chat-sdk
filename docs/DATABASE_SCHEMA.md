@@ -109,7 +109,6 @@ CREATE TABLE messages (
   pinned_by UUID REFERENCES users(id),
   scheduled_for TIMESTAMP, -- Scheduled messages
   metadata JSONB DEFAULT '{}',
-  attachments JSONB DEFAULT '[]',
   mentions JSONB DEFAULT '[]',
   quoted_message_id UUID REFERENCES messages(id), -- Quoted reply
   is_deleted BOOLEAN DEFAULT false,
@@ -125,6 +124,32 @@ CREATE INDEX idx_messages_channel_created ON messages(channel_id, created_at DES
 CREATE INDEX idx_messages_user ON messages(user_id);
 CREATE INDEX idx_messages_parent ON messages(parent_message_id);
 CREATE INDEX idx_messages_text_search ON messages USING gin(to_tsvector('english', text));
+CREATE INDEX idx_messages_quoted ON messages(quoted_message_id);
+CREATE INDEX idx_messages_status ON messages(status) WHERE status != 'sent';
+CREATE INDEX idx_messages_pinned ON messages(is_pinned) WHERE is_pinned = true;
+```
+
+#### **message_attachments**
+```sql
+CREATE TABLE message_attachments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  attachment_type VARCHAR(50) NOT NULL, -- 'image', 'video', 'audio', 'file', 'location'
+  url TEXT NOT NULL,
+  thumbnail_url TEXT,
+  file_name VARCHAR(255),
+  file_size BIGINT, -- Size in bytes
+  mime_type VARCHAR(100),
+  width INTEGER, -- For images/videos
+  height INTEGER, -- For images/videos
+  duration INTEGER, -- For audio/video in seconds
+  metadata JSONB DEFAULT '{}',
+  upload_status VARCHAR(50) DEFAULT 'completed', -- 'uploading', 'completed', 'failed'
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_attachments_message ON message_attachments(message_id);
+CREATE INDEX idx_attachments_type ON message_attachments(attachment_type);
 ```
 
 #### **message_reactions**
@@ -195,7 +220,6 @@ CREATE TABLE webhooks (
   name VARCHAR(255) NOT NULL,
   url TEXT NOT NULL,
   webhook_type VARCHAR(50) NOT NULL, -- 'before_message_send', 'push', 'custom_action'
-  events TEXT[], -- Array of event types to subscribe to
   secret VARCHAR(255), -- For signature verification
   is_active BOOLEAN DEFAULT true,
   retry_count INTEGER DEFAULT 3,
@@ -206,6 +230,56 @@ CREATE TABLE webhooks (
 
 CREATE INDEX idx_webhooks_app ON webhooks(app_id);
 CREATE INDEX idx_webhooks_type ON webhooks(webhook_type);
+```
+
+#### **webhook_event_types**
+```sql
+CREATE TABLE webhook_event_types (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_name VARCHAR(100) UNIQUE NOT NULL, -- 'message.new', 'message.updated', 'channel.created', etc.
+  category VARCHAR(50), -- 'message', 'channel', 'user', 'member', 'reaction', etc.
+  description TEXT,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_webhook_event_types_category ON webhook_event_types(category);
+CREATE INDEX idx_webhook_event_types_active ON webhook_event_types(is_active) WHERE is_active = true;
+
+-- Pre-populate with standard event types
+INSERT INTO webhook_event_types (event_name, category, description) VALUES
+  ('message.new', 'message', 'Triggered when a new message is sent'),
+  ('message.updated', 'message', 'Triggered when a message is edited'),
+  ('message.deleted', 'message', 'Triggered when a message is deleted'),
+  ('channel.created', 'channel', 'Triggered when a channel is created'),
+  ('channel.updated', 'channel', 'Triggered when a channel is updated'),
+  ('channel.deleted', 'channel', 'Triggered when a channel is deleted'),
+  ('user.presence.changed', 'user', 'Triggered when user presence changes'),
+  ('user.banned', 'user', 'Triggered when a user is banned'),
+  ('user.updated', 'user', 'Triggered when user profile is updated'),
+  ('member.added', 'member', 'Triggered when a member is added to a channel'),
+  ('member.removed', 'member', 'Triggered when a member is removed from a channel'),
+  ('reaction.new', 'reaction', 'Triggered when a reaction is added'),
+  ('reaction.deleted', 'reaction', 'Triggered when a reaction is removed'),
+  ('typing.start', 'typing', 'Triggered when a user starts typing'),
+  ('typing.stop', 'typing', 'Triggered when a user stops typing');
+```
+
+#### **webhook_subscriptions**
+```sql
+CREATE TABLE webhook_subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  webhook_id UUID NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
+  event_type_id UUID NOT NULL REFERENCES webhook_event_types(id) ON DELETE CASCADE,
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(webhook_id, event_type_id)
+);
+
+CREATE INDEX idx_webhook_subs_webhook ON webhook_subscriptions(webhook_id);
+CREATE INDEX idx_webhook_subs_event_type ON webhook_subscriptions(event_type_id);
+
+-- Composite index for efficient lookups
+CREATE INDEX idx_webhook_subs_lookup ON webhook_subscriptions(event_type_id, webhook_id);
 ```
 
 #### **webhook_logs**
@@ -289,7 +363,6 @@ CREATE TABLE message_drafts (
   channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   text TEXT,
-  attachments JSONB DEFAULT '[]',
   mentions JSONB DEFAULT '[]',
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW(),
@@ -297,6 +370,9 @@ CREATE TABLE message_drafts (
 );
 
 CREATE INDEX idx_drafts_user ON message_drafts(user_id);
+
+-- Note: Draft attachments can be stored temporarily in message_attachments
+-- with a reference to a draft message ID, or handled client-side until message is sent
 ```
 
 #### **applications**
@@ -308,12 +384,13 @@ CREATE TABLE applications (
   api_secret VARCHAR(255) NOT NULL,
   plan_id UUID REFERENCES subscription_plans(id),
   settings JSONB DEFAULT '{}',
-  webhook_url TEXT,
-  webhook_secret VARCHAR(255),
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Note: Webhook configuration is now managed via the 'webhooks' table
+-- instead of storing webhook_url and webhook_secret directly in applications
 ```
 
 #### **subscription_plans**
@@ -459,3 +536,416 @@ Type: List
 LPUSH queue:messages '{"messageId":"msg-123",...}'
 RPOP queue:messages
 ```
+
+---
+
+## Database Schema Design Principles
+
+### Relational Model Improvements
+
+This schema follows best practices for relational database design by avoiding JSON arrays for relational data and using proper foreign key relationships instead.
+
+#### **1. Webhook Events - Three-Table Relational Approach**
+
+**Previous Design (Anti-pattern):**
+```sql
+-- ❌ Storing events as JSON array
+CREATE TABLE webhooks (
+  events TEXT[] -- ['message.new', 'channel.created', ...]
+);
+```
+
+**Current Design (Best Practice):**
+```sql
+-- ✅ Proper three-table relational model
+
+-- 1. Webhooks table (webhook configuration)
+CREATE TABLE webhooks (
+  id UUID PRIMARY KEY,
+  app_id UUID REFERENCES applications(id),
+  name VARCHAR(255) NOT NULL,
+  url TEXT NOT NULL,
+  -- ... other webhook config
+);
+
+-- 2. Webhook Event Types table (master list of all event types)
+CREATE TABLE webhook_event_types (
+  id UUID PRIMARY KEY,
+  event_name VARCHAR(100) UNIQUE NOT NULL,
+  category VARCHAR(50),
+  description TEXT,
+  is_active BOOLEAN DEFAULT true
+);
+
+-- 3. Webhook Subscriptions table (many-to-many relationship)
+CREATE TABLE webhook_subscriptions (
+  id UUID PRIMARY KEY,
+  webhook_id UUID REFERENCES webhooks(id) ON DELETE CASCADE,
+  event_type_id UUID REFERENCES webhook_event_types(id) ON DELETE CASCADE,
+  UNIQUE(webhook_id, event_type_id)
+);
+```
+
+**Benefits:**
+- ✅ **Centralized Event Management**: Single source of truth for all event types
+- ✅ **Query Efficiency**: Can efficiently query webhooks by event type using indexes
+- ✅ **Data Integrity**: Foreign key constraints ensure referential integrity
+- ✅ **Event Discovery**: Easy to list all available event types
+- ✅ **Event Metadata**: Can add description, category, and other metadata per event
+- ✅ **Scalability**: Better performance for large numbers of webhooks and events
+- ✅ **Maintainability**: Easier to audit and manage event subscriptions
+- ✅ **Analytics**: Track which events are most popular across all webhooks
+
+**Example Queries:**
+```sql
+-- Find all webhooks subscribed to 'message.new'
+SELECT w.* 
+FROM webhooks w
+JOIN webhook_subscriptions ws ON w.id = ws.webhook_id
+JOIN webhook_event_types wet ON ws.event_type_id = wet.id
+WHERE wet.event_name = 'message.new' AND w.is_active = true;
+
+-- Get all events for a specific webhook
+SELECT wet.event_name, wet.category, wet.description
+FROM webhook_event_types wet
+JOIN webhook_subscriptions ws ON wet.id = ws.event_type_id
+WHERE ws.webhook_id = 'webhook-123'
+ORDER BY wet.category, wet.event_name;
+
+-- Count webhooks per event type
+SELECT 
+  wet.event_name,
+  wet.category,
+  COUNT(ws.webhook_id) as webhook_count
+FROM webhook_event_types wet
+LEFT JOIN webhook_subscriptions ws ON wet.id = ws.event_type_id
+GROUP BY wet.id, wet.event_name, wet.category
+ORDER BY webhook_count DESC;
+
+-- Find all available event types by category
+SELECT category, array_agg(event_name ORDER BY event_name) as events
+FROM webhook_event_types
+WHERE is_active = true
+GROUP BY category;
+
+-- Get webhooks NOT subscribed to a specific event
+SELECT w.*
+FROM webhooks w
+WHERE w.id NOT IN (
+  SELECT ws.webhook_id
+  FROM webhook_subscriptions ws
+  JOIN webhook_event_types wet ON ws.event_type_id = wet.id
+  WHERE wet.event_name = 'message.new'
+);
+
+-- Most popular event types
+SELECT 
+  wet.event_name,
+  wet.category,
+  COUNT(ws.webhook_id) as subscription_count,
+  ROUND(100.0 * COUNT(ws.webhook_id) / (SELECT COUNT(*) FROM webhooks), 2) as adoption_rate
+FROM webhook_event_types wet
+LEFT JOIN webhook_subscriptions ws ON wet.id = ws.event_type_id
+GROUP BY wet.id, wet.event_name, wet.category
+ORDER BY subscription_count DESC
+LIMIT 10;
+```
+
+---
+
+#### **2. Message Attachments - Relational Approach**
+
+**Previous Design (Anti-pattern):**
+```sql
+-- ❌ Storing attachments as JSON
+CREATE TABLE messages (
+  attachments JSONB DEFAULT '[]' -- [{"type":"image","url":"..."}]
+);
+```
+
+**Current Design (Best Practice):**
+```sql
+-- ✅ Proper relational model
+CREATE TABLE messages (
+  id UUID PRIMARY KEY,
+  channel_id UUID REFERENCES channels(id),
+  -- ... other fields (no attachments field)
+);
+
+CREATE TABLE message_attachments (
+  id UUID PRIMARY KEY,
+  message_id UUID REFERENCES messages(id) ON DELETE CASCADE,
+  attachment_type VARCHAR(50) NOT NULL,
+  url TEXT NOT NULL,
+  thumbnail_url TEXT,
+  file_name VARCHAR(255),
+  file_size BIGINT,
+  mime_type VARCHAR(100),
+  width INTEGER,
+  height INTEGER,
+  duration INTEGER,
+  metadata JSONB DEFAULT '{}',
+  upload_status VARCHAR(50) DEFAULT 'completed',
+  created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+**Benefits:**
+- ✅ **Type Safety**: Each attachment field has proper data type validation
+- ✅ **Query Efficiency**: Can query attachments by type, size, status independently
+- ✅ **Storage Optimization**: No JSON parsing overhead for large attachments
+- ✅ **Indexing**: Can create indexes on attachment properties
+- ✅ **Upload Tracking**: Can track upload status per attachment
+- ✅ **File Management**: Easier to implement file cleanup and storage management
+
+**Example Queries:**
+```sql
+-- Find all image attachments in a channel
+SELECT ma.* FROM message_attachments ma
+JOIN messages m ON ma.message_id = m.id
+WHERE m.channel_id = 'channel-123' 
+  AND ma.attachment_type = 'image'
+ORDER BY ma.created_at DESC;
+
+-- Calculate total storage used by user
+SELECT u.id, u.username, SUM(ma.file_size) as total_bytes
+FROM users u
+JOIN messages m ON u.id = m.user_id
+JOIN message_attachments ma ON m.id = ma.message_id
+GROUP BY u.id, u.username;
+
+-- Find large video files
+SELECT m.id, m.text, ma.file_name, ma.file_size
+FROM messages m
+JOIN message_attachments ma ON m.id = ma.message_id
+WHERE ma.attachment_type = 'video' 
+  AND ma.file_size > 104857600 -- 100MB
+ORDER BY ma.file_size DESC;
+
+-- Track upload failures
+SELECT COUNT(*) as failed_uploads
+FROM message_attachments
+WHERE upload_status = 'failed'
+  AND created_at > NOW() - INTERVAL '24 hours';
+```
+
+---
+
+#### **3. Application Webhooks - Separation of Concerns**
+
+**Previous Design (Anti-pattern):**
+```sql
+-- ❌ Mixing webhook config with application settings
+CREATE TABLE applications (
+  webhook_url TEXT,
+  webhook_secret VARCHAR(255)
+  -- Only supports one webhook per application
+);
+```
+
+**Current Design (Best Practice):**
+```sql
+-- ✅ Dedicated webhooks table
+CREATE TABLE applications (
+  id UUID PRIMARY KEY,
+  -- ... application fields only
+  -- No webhook fields
+);
+
+CREATE TABLE webhooks (
+  id UUID PRIMARY KEY,
+  app_id UUID REFERENCES applications(id),
+  name VARCHAR(255) NOT NULL,
+  url TEXT NOT NULL,
+  webhook_type VARCHAR(50) NOT NULL,
+  secret VARCHAR(255),
+  -- ... webhook-specific configuration
+);
+```
+
+**Benefits:**
+- ✅ **Multiple Webhooks**: Applications can have multiple webhooks
+- ✅ **Webhook Types**: Support different webhook types (before_send, push, custom)
+- ✅ **Independent Management**: Webhooks can be managed separately from applications
+- ✅ **Audit Trail**: Track webhook changes via webhook_logs table
+- ✅ **Scalability**: Easy to add webhook-specific features
+
+**Example Queries:**
+```sql
+-- Get all webhooks for an application
+SELECT * FROM webhooks
+WHERE app_id = 'app-123' AND is_active = true;
+
+-- Find webhooks by type
+SELECT w.*, a.name as app_name
+FROM webhooks w
+JOIN applications a ON w.app_id = a.id
+WHERE w.webhook_type = 'before_message_send';
+
+-- Webhook delivery success rate
+SELECT 
+  w.id,
+  w.name,
+  COUNT(wl.id) as total_deliveries,
+  SUM(CASE WHEN wl.response_status BETWEEN 200 AND 299 THEN 1 ELSE 0 END) as successful,
+  ROUND(100.0 * SUM(CASE WHEN wl.response_status BETWEEN 200 AND 299 THEN 1 ELSE 0 END) / COUNT(wl.id), 2) as success_rate
+FROM webhooks w
+LEFT JOIN webhook_logs wl ON w.id = wl.webhook_id
+WHERE wl.created_at > NOW() - INTERVAL '7 days'
+GROUP BY w.id, w.name;
+```
+
+---
+
+### Key Relationships Summary
+
+```
+applications (1) ──→ (N) webhooks
+webhooks (N) ──→ (M) webhook_event_types (via webhook_subscriptions)
+webhooks (1) ──→ (N) webhook_logs
+webhook_event_types (1) ──→ (N) webhook_subscriptions
+
+messages (1) ──→ (N) message_attachments
+messages (1) ──→ (N) message_reactions
+messages (1) ──→ (N) message_reads
+
+channels (1) ──→ (N) messages
+channels (1) ──→ (N) channel_members
+
+users (1) ──→ (N) messages
+users (1) ──→ (N) user_devices
+users (N) ──→ (1) teams
+
+applications (1) ──→ (N) teams
+applications (1) ──→ (N) campaigns
+applications (1) ──→ (N) block_lists
+```
+
+**Note**: The webhook system uses a many-to-many relationship:
+- One webhook can subscribe to multiple event types
+- One event type can be used by multiple webhooks
+- `webhook_subscriptions` is the junction table connecting them
+
+---
+
+### Migration Notes
+
+When migrating from JSON-based storage to relational tables:
+
+1. **Webhook Events Migration:**
+```sql
+-- Step 1: Create webhook_event_types table and populate with standard events
+CREATE TABLE webhook_event_types (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_name VARCHAR(100) UNIQUE NOT NULL,
+  category VARCHAR(50),
+  description TEXT,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+INSERT INTO webhook_event_types (event_name, category, description) VALUES
+  ('message.new', 'message', 'Triggered when a new message is sent'),
+  ('message.updated', 'message', 'Triggered when a message is edited'),
+  ('message.deleted', 'message', 'Triggered when a message is deleted'),
+  ('channel.created', 'channel', 'Triggered when a channel is created'),
+  ('channel.updated', 'channel', 'Triggered when a channel is updated'),
+  ('channel.deleted', 'channel', 'Triggered when a channel is deleted'),
+  ('user.presence.changed', 'user', 'Triggered when user presence changes'),
+  ('user.banned', 'user', 'Triggered when a user is banned'),
+  ('user.updated', 'user', 'Triggered when user profile is updated'),
+  ('member.added', 'member', 'Triggered when a member is added to a channel'),
+  ('member.removed', 'member', 'Triggered when a member is removed from a channel'),
+  ('reaction.new', 'reaction', 'Triggered when a reaction is added'),
+  ('reaction.deleted', 'reaction', 'Triggered when a reaction is removed'),
+  ('typing.start', 'typing', 'Triggered when a user starts typing'),
+  ('typing.stop', 'typing', 'Triggered when a user stops typing');
+
+-- Step 2: Create webhook_subscriptions table
+CREATE TABLE webhook_subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  webhook_id UUID NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
+  event_type_id UUID NOT NULL REFERENCES webhook_event_types(id) ON DELETE CASCADE,
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(webhook_id, event_type_id)
+);
+
+-- Step 3: Migrate existing events from JSON array to subscriptions
+INSERT INTO webhook_subscriptions (webhook_id, event_type_id)
+SELECT 
+  w.id,
+  wet.id
+FROM webhooks w,
+unnest(w.events) as event_name
+JOIN webhook_event_types wet ON wet.event_name = event_name
+WHERE w.events IS NOT NULL;
+
+-- Step 4: Remove old events column
+ALTER TABLE webhooks DROP COLUMN IF EXISTS events;
+
+-- Step 5: Create indexes
+CREATE INDEX idx_webhook_subs_webhook ON webhook_subscriptions(webhook_id);
+CREATE INDEX idx_webhook_subs_event_type ON webhook_subscriptions(event_type_id);
+CREATE INDEX idx_webhook_subs_lookup ON webhook_subscriptions(event_type_id, webhook_id);
+```
+
+2. **Message Attachments Migration:**
+```sql
+-- Extract attachments from JSON to relational table
+INSERT INTO message_attachments (
+  message_id, attachment_type, url, file_name, file_size, mime_type
+)
+SELECT 
+  m.id,
+  a->>'type',
+  a->>'url',
+  a->>'fileName',
+  (a->>'size')::BIGINT,
+  a->>'mimeType'
+FROM messages m,
+jsonb_array_elements(m.attachments) as a
+WHERE m.attachments IS NOT NULL AND jsonb_array_length(m.attachments) > 0;
+
+-- Remove old attachments column
+ALTER TABLE messages DROP COLUMN attachments;
+```
+
+3. **Application Webhooks Migration:**
+```sql
+-- Migrate existing webhook config to webhooks table
+INSERT INTO webhooks (app_id, name, url, secret, webhook_type, is_active)
+SELECT 
+  id,
+  name || ' Default Webhook',
+  webhook_url,
+  webhook_secret,
+  'push',
+  true
+FROM applications
+WHERE webhook_url IS NOT NULL;
+
+-- Remove old webhook columns
+ALTER TABLE applications 
+  DROP COLUMN webhook_url,
+  DROP COLUMN webhook_secret;
+```
+
+---
+
+### Performance Considerations
+
+1. **Indexes**: All foreign keys have corresponding indexes for optimal join performance
+2. **Cascade Deletes**: ON DELETE CASCADE ensures referential integrity without orphaned records
+3. **Partial Indexes**: Used for boolean flags to optimize queries on filtered data
+4. **GIN Indexes**: Used for full-text search and JSONB queries where appropriate
+5. **Composite Indexes**: Created for common query patterns (e.g., channel_id + created_at)
+
+---
+
+### Data Integrity Rules
+
+1. **Foreign Keys**: All relationships enforced via foreign key constraints
+2. **Unique Constraints**: Prevent duplicate webhook events, channel members, etc.
+3. **Check Constraints**: Can be added for business rules (e.g., file_size > 0)
+4. **NOT NULL**: Required fields marked as NOT NULL
+5. **Default Values**: Sensible defaults for optional fields
