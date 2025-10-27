@@ -27,6 +27,7 @@ Build a competitive Chat SDK that offers:
 
 ### Business Documentation
 - **[Business Model](./docs/BUSINESS_MODEL.md)** - Pricing, revenue, and go-to-market
+- **[Cost Analysis](./docs/COST_ANALYSIS.md)** - Detailed cost breakdown and ROI projections
 - **[Implementation Roadmap](./docs/ROADMAP.md)** - 12-month development plan
 
 ## ✨ Key Features
