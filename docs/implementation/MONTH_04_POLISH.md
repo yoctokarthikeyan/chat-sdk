@@ -24,11 +24,11 @@
 **Install Dependencies**:
 
 ```bash
-cd packages/server
+cd apps/server
 pnpm add firebase-admin apn
 ```
 
-**Create `packages/server/src/notifications/notifications.service.ts`**:
+**Create `apps/server/src/notifications/notifications.service.ts`**:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -136,7 +136,7 @@ export class NotificationsService {
 pnpm add @elastic/elasticsearch
 ```
 
-**Create `packages/server/src/search/search.service.ts`**:
+**Create `apps/server/src/search/search.service.ts`**:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -200,7 +200,7 @@ export class SearchService {
 
 ### Task 3: Message Reactions
 
-**Update Prisma Schema** (`packages/server/prisma/schema.prisma`):
+**Update Prisma Schema** (`apps/server/prisma/schema.prisma`):
 
 ```prisma
 model MessageReaction {
@@ -240,11 +240,11 @@ model User {
 **Generate Migration**:
 
 ```bash
-cd packages/server
+cd apps/server
 npx prisma migrate dev --name add_message_reactions
 ```
 
-**Create `packages/server/src/reactions/reactions.service.ts`**:
+**Create `apps/server/src/reactions/reactions.service.ts`**:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -320,7 +320,7 @@ export class ReactionsService {
 
 ### Task 4: Moderation System
 
-**First, add Prisma models** (`packages/server/prisma/schema.prisma`):
+**First, add Prisma models** (`apps/server/prisma/schema.prisma`):
 
 ```prisma
 enum ModerationStatus {
@@ -381,11 +381,11 @@ model User {
 **Generate Migration**:
 
 ```bash
-cd packages/server
+cd apps/server
 npx prisma migrate dev --name add_moderation_system
 ```
 
-**Create `packages/server/src/moderation/moderation.service.ts`**:
+**Create `apps/server/src/moderation/moderation.service.ts`**:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -494,7 +494,7 @@ export class ModerationService {
 
 ### Task 1: Unit Tests
 
-**Create `packages/server/test/unit/channels.service.spec.ts`**:
+**Create `apps/server/test/unit/channels.service.spec.ts`**:
 
 ```typescript
 import { Test, TestingModule } from '@nestjs/testing';
@@ -566,7 +566,7 @@ describe('ChannelsService', () => {
 
 ### Task 2: Integration Tests
 
-**Create `packages/server/test/integration/messages.e2e-spec.ts`**:
+**Create `apps/server/test/integration/messages.e2e-spec.ts`**:
 
 ```typescript
 import { Test } from '@nestjs/testing';
@@ -672,7 +672,7 @@ k6 run test/load/message-sending.js
 
 ### Task 4: API Documentation
 
-**Update `packages/server/src/main.ts`**:
+**Update `apps/server/src/main.ts`**:
 
 ```typescript
 import { NestFactory } from '@nestjs/core';
@@ -838,7 +838,7 @@ volumes:
 pnpm add @sentry/node
 ```
 
-**Configure in `packages/server/src/main.ts`**:
+**Configure in `apps/server/src/main.ts`**:
 
 ```typescript
 import * as Sentry from '@sentry/node';

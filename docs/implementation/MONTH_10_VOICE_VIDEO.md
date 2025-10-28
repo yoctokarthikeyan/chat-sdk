@@ -31,7 +31,7 @@
 
 ### Task 1: Prisma Schema
 
-**Update `packages/server/prisma/schema.prisma`**:
+**Update `apps/server/prisma/schema.prisma`**:
 
 ```prisma
 enum CallType {
@@ -130,7 +130,7 @@ model Channel {
 **Generate Migration**:
 
 ```bash
-cd packages/server
+cd apps/server
 npx prisma migrate dev --name add_voice_video_calls
 ```
 
@@ -138,7 +138,7 @@ npx prisma migrate dev --name add_voice_video_calls
 
 ### Task 2: WebRTC Signaling Gateway
 
-**Create `packages/server/src/webrtc/webrtc.gateway.ts`**:
+**Create `apps/server/src/webrtc/webrtc.gateway.ts`**:
 
 ```typescript
 import {
@@ -304,7 +304,7 @@ export class WebRTCGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
 ### Task 3: Calls Service
 
-**Create `packages/server/src/calls/calls.service.ts`**:
+**Create `apps/server/src/calls/calls.service.ts`**:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -512,7 +512,7 @@ sudo systemctl status coturn
 
 ### Task 2: ICE Server Configuration
 
-**Create `packages/server/src/webrtc/ice-servers.service.ts`**:
+**Create `apps/server/src/webrtc/ice-servers.service.ts`**:
 
 ```typescript
 import { Injectable } from '@nestjs/common';

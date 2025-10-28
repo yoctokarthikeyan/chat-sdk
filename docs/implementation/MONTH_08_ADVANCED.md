@@ -32,7 +32,7 @@
 
 ### Task 1: Prisma Schema
 
-**Update `packages/server/prisma/schema.prisma`**:
+**Update `apps/server/prisma/schema.prisma`**:
 
 ```prisma
 enum CampaignStatus {
@@ -128,7 +128,7 @@ model Channel {
 **Generate Migration**:
 
 ```bash
-cd packages/server
+cd apps/server
 npx prisma migrate dev --name add_campaigns
 ```
 
@@ -136,7 +136,7 @@ npx prisma migrate dev --name add_campaigns
 
 ### Task 2: Campaign Service
 
-**Create `packages/server/src/campaigns/campaigns.service.ts`**:
+**Create `apps/server/src/campaigns/campaigns.service.ts`**:
 
 ```typescript
 import { Injectable, Logger } from '@nestjs/common';
@@ -355,7 +355,7 @@ export class CampaignsService {
 pnpm add @google-cloud/translate
 ```
 
-**Create `packages/server/src/ai/translation.service.ts`**:
+**Create `apps/server/src/ai/translation.service.ts`**:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -406,7 +406,7 @@ export class TranslationService {
 pnpm add openai
 ```
 
-**Create `packages/server/src/ai/smart-replies.service.ts`**:
+**Create `apps/server/src/ai/smart-replies.service.ts`**:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -459,7 +459,7 @@ export class SmartRepliesService {
 
 ### Task 3: Content Moderation (AI)
 
-**Create `packages/server/src/ai/content-moderation.service.ts`**:
+**Create `apps/server/src/ai/content-moderation.service.ts`**:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -535,7 +535,7 @@ export class ContentModerationService {
 
 ### Task 4: Message Sentiment Analysis
 
-**Create `packages/server/src/ai/sentiment.service.ts`**:
+**Create `apps/server/src/ai/sentiment.service.ts`**:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -588,7 +588,7 @@ export class SentimentService {
 
 ### Task 1: Enhanced Elasticsearch Integration
 
-**Create `packages/server/src/search/advanced-search.service.ts`**:
+**Create `apps/server/src/search/advanced-search.service.ts`**:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -760,7 +760,7 @@ export class AdvancedSearchService {
 
 ### Task 1: AI Controller
 
-**Create `packages/server/src/ai/ai.controller.ts`**:
+**Create `apps/server/src/ai/ai.controller.ts`**:
 
 ```typescript
 import { Controller, Post, Get, Body, Query, UseGuards } from '@nestjs/common';
@@ -819,7 +819,7 @@ export class AIController {
 
 ### Task 2: Campaign Controller
 
-**Create `packages/server/src/campaigns/campaigns.controller.ts`**:
+**Create `apps/server/src/campaigns/campaigns.controller.ts`**:
 
 ```typescript
 import { Controller, Post, Get, Body, Param, UseGuards } from '@nestjs/common';

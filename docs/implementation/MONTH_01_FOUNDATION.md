@@ -68,15 +68,19 @@ chat-sdk/
 │   └── workflows/
 │       ├── ci.yml
 │       └── deploy.yml
-├── packages/
+├── apps/
 │   ├── server/          # NestJS backend API (Prisma)
-│   ├── user-portal/     # Next.js customer portal
+│   └── user-portal/     # Next.js customer portal
+├── packages/
 │   ├── sdk-core/        # TypeScript SDK
 │   └── sdk-react/       # React SDK
 ├── docker/
 │   ├── Dockerfile.server
 │   ├── Dockerfile.portal
 │   └── docker-compose.yml
+├── docs/
+│   ├── ROADMAP.md
+│   └── implementation/
 ├── .gitignore
 ├── .nvmrc
 ├── pnpm-workspace.yaml
@@ -92,9 +96,9 @@ chat-sdk/
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "pnpm --parallel --filter server --filter user-portal dev",
-    "dev:server": "pnpm --filter server dev",
-    "dev:portal": "pnpm --filter user-portal dev",
+    "dev": "pnpm --parallel --filter @chat-sdk/server --filter @chat-sdk/user-portal dev",
+    "dev:server": "pnpm --filter @chat-sdk/server dev",
+    "dev:portal": "pnpm --filter @chat-sdk/user-portal dev",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
@@ -119,6 +123,7 @@ chat-sdk/
 
 ```yaml
 packages:
+  - 'apps/*'
   - 'packages/*'
 ```
 
@@ -271,14 +276,14 @@ docker-compose ps  # Verify all services are running
 psql -h localhost -U chatuser -d chatdb -c "SELECT version();"
 
 # Test Redis
-redis-cli ping  # Should return PONG
+redis-cli ping
 ```
 
 ---
 
 ### Task 4: NestJS Backend Initialization
 
-**Create `packages/server/package.json`**:
+**Create `apps/server/package.json`**:
 
 ```json
 {
@@ -340,7 +345,7 @@ redis-cli ping  # Should return PONG
 **Initialize NestJS**:
 
 ```bash
-cd packages/server
+cd apps/server
 pnpm install
 nest new . --skip-git --package-manager pnpm
 ```
@@ -348,7 +353,7 @@ nest new . --skip-git --package-manager pnpm
 **Initialize Prisma**:
 
 ```bash
-cd packages/server
+cd apps/server
 npx prisma init
 ```
 
@@ -356,7 +361,7 @@ This creates:
 - `prisma/schema.prisma` - Database schema
 - `.env` - Environment variables
 
-**Create `packages/server/prisma/schema.prisma`**:
+**Create `apps/server/prisma/schema.prisma`**:
 
 ```prisma
 generator client {
@@ -371,7 +376,7 @@ datasource db {
 // Models will be added in Week 3-4
 ```
 
-**Create Prisma Service** `packages/server/src/prisma/prisma.service.ts`:
+**Create Prisma Service** `apps/server/src/prisma/prisma.service.ts`:
 
 ```typescript
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
@@ -389,7 +394,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 }
 ```
 
-**Create Prisma Module** `packages/server/src/prisma/prisma.module.ts`:
+**Create Prisma Module** `apps/server/src/prisma/prisma.module.ts`:
 
 ```typescript
 import { Global, Module } from '@nestjs/common';
@@ -520,7 +525,7 @@ jobs:
 
 ### Task 1: Prisma Schema Design
 
-**Update `packages/server/prisma/schema.prisma`**:
+**Update `apps/server/prisma/schema.prisma`**:
 
 ```prisma
 generator client {
@@ -595,7 +600,7 @@ model UserDevice {
 **Generate Prisma Client and Create Migration**:
 
 ```bash
-cd packages/server
+cd apps/server
 
 # Generate Prisma Client
 npx prisma generate
@@ -611,7 +616,7 @@ npx prisma studio
 
 ### Task 2: User Types and DTOs
 
-**Create `packages/server/src/users/types/user.types.ts`**:
+**Create `apps/server/src/users/types/user.types.ts`**:
 
 ```typescript
 import { User, UserType } from '@prisma/client';
@@ -662,7 +667,7 @@ export class UpdateUserDto {
 
 ### Task 3: Authentication Module
 
-**Create `packages/server/src/auth/auth.module.ts`**:
+**Create `apps/server/src/auth/auth.module.ts`**:
 
 ```typescript
 import { Module } from '@nestjs/common';
@@ -696,7 +701,7 @@ import { UsersModule } from '../users/users.module';
 export class AuthModule {}
 ```
 
-**Create `packages/server/src/auth/auth.service.ts`**:
+**Create `apps/server/src/auth/auth.service.ts`**:
 
 ```typescript
 import { Injectable, UnauthorizedException } from '@nestjs/common';
@@ -810,7 +815,7 @@ export class AuthService {
 
 ### Smoke Tests
 
-**Create `packages/server/src/auth/auth.service.spec.ts`**:
+**Create `apps/server/src/auth/auth.service.spec.ts`**:
 
 ```typescript
 import { Test, TestingModule } from '@nestjs/testing';
@@ -872,7 +877,7 @@ pnpm test
 
 ### Initialize Next.js User Portal
 
-**Create `packages/user-portal/package.json`**:
+**Create `apps/user-portal/package.json`**:
 
 ```json
 {
@@ -910,12 +915,12 @@ pnpm test
 **Initialize Next.js**:
 
 ```bash
-cd packages/user-portal
+cd apps/user-portal
 pnpm install
 npx create-next-app@latest . --typescript --tailwind --app --no-src-dir
 ```
 
-**Create `packages/user-portal/next.config.js`**:
+**Create `apps/user-portal/next.config.js`**:
 
 ```javascript
 /** @type {import('next').NextConfig} */
@@ -929,7 +934,7 @@ const nextConfig = {
 module.exports = nextConfig;
 ```
 
-**Create `packages/user-portal/.env.local`**:
+**Create `apps/user-portal/.env.local`**:
 
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:3000
@@ -939,7 +944,7 @@ NEXTAUTH_SECRET=your-nextauth-secret-change-in-production
 
 ### Create Basic Layout
 
-**Create `packages/user-portal/app/layout.tsx`**:
+**Create `apps/user-portal/app/layout.tsx`**:
 
 ```typescript
 import type { Metadata } from 'next';
@@ -966,7 +971,7 @@ export default function RootLayout({
 }
 ```
 
-**Create `packages/user-portal/app/page.tsx`**:
+**Create `apps/user-portal/app/page.tsx`**:
 
 ```typescript
 export default function Home() {
@@ -983,7 +988,7 @@ export default function Home() {
 
 ### Create API Client
 
-**Create `packages/user-portal/lib/api-client.ts`**:
+**Create `apps/user-portal/lib/api-client.ts`**:
 
 ```typescript
 import axios from 'axios';
@@ -1040,7 +1045,7 @@ export default apiClient;
 
 ### Create Authentication Pages
 
-**Create `packages/user-portal/app/(auth)/login/page.tsx`**:
+**Create `apps/user-portal/app/(auth)/login/page.tsx`**:
 
 ```typescript
 'use client';
@@ -1122,7 +1127,7 @@ export default function LoginPage() {
 }
 ```
 
-**Create `packages/user-portal/app/(dashboard)/dashboard/page.tsx`**:
+**Create `apps/user-portal/app/(dashboard)/dashboard/page.tsx`**:
 
 ```typescript
 export default function DashboardPage() {
@@ -1140,7 +1145,7 @@ export default function DashboardPage() {
 **Test User Portal**:
 
 ```bash
-cd packages/user-portal
+cd apps/user-portal
 pnpm dev
 # Visit http://localhost:3001
 ```
@@ -1149,7 +1154,7 @@ pnpm dev
 
 ## Update AppModule with Prisma
 
-**Update `packages/server/src/app.module.ts`**:
+**Update `apps/server/src/app.module.ts`**:
 
 ```typescript
 import { Module } from '@nestjs/common';

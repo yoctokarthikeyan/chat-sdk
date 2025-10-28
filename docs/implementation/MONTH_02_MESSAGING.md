@@ -10,7 +10,7 @@
 
 ### Prisma Schema Update
 
-**Update `packages/server/prisma/schema.prisma`** (add to existing schema):
+**Update `apps/server/prisma/schema.prisma`** (add to existing schema):
 
 ```prisma
 enum ChannelType {
@@ -142,7 +142,7 @@ model User {
 **Generate Migration**:
 
 ```bash
-cd packages/server
+cd apps/server
 npx prisma migrate dev --name messaging_schema
 ```
 
@@ -150,7 +150,7 @@ npx prisma migrate dev --name messaging_schema
 
 ### Channel Types & DTOs
 
-**Create `packages/server/src/channels/types/channel.types.ts`**:
+**Create `apps/server/src/channels/types/channel.types.ts`**:
 
 ```typescript
 import { Channel, ChannelType, ChannelMember, MemberRole } from '@prisma/client';
@@ -176,7 +176,7 @@ export class UpdateChannelDto {
 }
 ```
 
-**Create `packages/server/src/channels/channels.service.ts`**:
+**Create `apps/server/src/channels/channels.service.ts`**:
 
 ```typescript
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
@@ -335,7 +335,7 @@ export class ChannelsService {
 
 ### Message Service
 
-**Create `packages/server/src/messages/types/message.types.ts`**:
+**Create `apps/server/src/messages/types/message.types.ts`**:
 
 ```typescript
 import { Message, MessageType, MessageStatus, MessageAttachment } from '@prisma/client';
@@ -368,7 +368,7 @@ export class UpdateMessageDto {
 }
 ```
 
-**Create `packages/server/src/messages/messages.service.ts`**:
+**Create `apps/server/src/messages/messages.service.ts`**:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -549,7 +549,7 @@ export class MessagesService {
 
 ### WebSocket Gateway
 
-**Create `packages/server/src/websocket/websocket.gateway.ts`**:
+**Create `apps/server/src/websocket/websocket.gateway.ts`**:
 
 ```typescript
 import {
@@ -660,7 +660,7 @@ pnpm add @aws-sdk/client-s3 @aws-sdk/s3-request-presigner multer
 pnpm add -D @types/multer
 ```
 
-**Create `packages/server/src/upload/upload.service.ts`**:
+**Create `apps/server/src/upload/upload.service.ts`**:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -753,7 +753,7 @@ GET    /api/v1/upload/signed-url     Get signed URL
 
 ## Testing
 
-**Create `packages/server/test/channels.e2e-spec.ts`**:
+**Create `apps/server/test/channels.e2e-spec.ts`**:
 
 ```typescript
 import { Test } from '@nestjs/testing';

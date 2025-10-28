@@ -34,7 +34,7 @@
 pnpm add passport-saml @node-saml/passport-saml
 ```
 
-**Prisma Schema** (`packages/server/prisma/schema.prisma`):
+**Prisma Schema** (`apps/server/prisma/schema.prisma`):
 
 ```prisma
 enum SSOProviderType {
@@ -183,7 +183,7 @@ model Team {
 }
 ```
 
-**Seed Permissions** (`packages/server/prisma/seed.ts`):
+**Seed Permissions** (`apps/server/prisma/seed.ts`):
 
 ```typescript
 import { PrismaClient } from '@prisma/client';

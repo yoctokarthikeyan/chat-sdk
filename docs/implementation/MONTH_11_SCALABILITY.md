@@ -64,7 +64,7 @@ export function getShardForTeam(teamId: string): string {
 
 ### Task 2: Multi-Database Connection Manager
 
-**Create `packages/server/src/database/shard-manager.ts`** (Prisma version):
+**Create `apps/server/src/database/shard-manager.ts`** (Prisma version):
 
 ```typescript
 import { PrismaClient } from '@prisma/client';
@@ -137,7 +137,7 @@ export class ShardManager implements OnModuleInit {
 
 ### Task 3: Sharded Repository Pattern
 
-**Create `packages/server/src/database/sharded-service.ts`** (Prisma version):
+**Create `apps/server/src/database/sharded-service.ts`** (Prisma version):
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -291,7 +291,7 @@ docker exec -it redis-node-1 redis-cli --cluster create \
 pnpm add ioredis
 ```
 
-**Create `packages/server/src/cache/redis-cluster.service.ts`**:
+**Create `apps/server/src/cache/redis-cluster.service.ts`**:
 
 ```typescript
 import { Injectable, OnModuleInit } from '@nestjs/common';
@@ -368,7 +368,7 @@ export class RedisClusterService implements OnModuleInit {
 
 ### Task 3: Distributed Caching
 
-**Create `packages/server/src/cache/distributed-cache.service.ts`**:
+**Create `apps/server/src/cache/distributed-cache.service.ts`**:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -602,7 +602,7 @@ resource "aws_cloudfront_distribution" "cdn" {
 
 ### Task 2: Image Optimization Service
 
-**Create `packages/server/src/media/image-optimizer.service.ts`**:
+**Create `apps/server/src/media/image-optimizer.service.ts`**:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -738,7 +738,7 @@ const dataSource = new DataSource({
 
 ## Performance Monitoring
 
-**Create `packages/server/src/monitoring/performance.interceptor.ts`**:
+**Create `apps/server/src/monitoring/performance.interceptor.ts`**:
 
 ```typescript
 import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';

@@ -39,7 +39,7 @@
 
 ### Task 1: Multi-Tenant Branding
 
-**Prisma Schema** (`packages/server/prisma/schema.prisma`):
+**Prisma Schema** (`apps/server/prisma/schema.prisma`):
 
 ```prisma
 model TenantBranding {
@@ -97,7 +97,7 @@ model Team {
 **Generate Migration**:
 
 ```bash
-cd packages/server
+cd apps/server
 npx prisma migrate dev --name add_enterprise_features
 ```
 
@@ -105,7 +105,7 @@ npx prisma migrate dev --name add_enterprise_features
 
 ### Task 2: Branding Service
 
-**Create `packages/server/src/branding/branding.service.ts`**:
+**Create `apps/server/src/branding/branding.service.ts`**:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -500,7 +500,7 @@ spec:
 
 ### Task 1: Slack Integration
 
-**Create `packages/server/src/integrations/slack/slack.service.ts`**:
+**Create `apps/server/src/integrations/slack/slack.service.ts`**:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -581,7 +581,7 @@ export class SlackIntegrationService {
 
 ### Task 2: Microsoft Teams Integration
 
-**Create `packages/server/src/integrations/teams/teams.service.ts`**:
+**Create `apps/server/src/integrations/teams/teams.service.ts`**:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -636,7 +636,7 @@ export class TeamsIntegrationService {
 
 ### Task 3: Salesforce Integration
 
-**Create `packages/server/src/integrations/salesforce/salesforce.service.ts`**:
+**Create `apps/server/src/integrations/salesforce/salesforce.service.ts`**:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -695,7 +695,7 @@ export class SalesforceIntegrationService {
 
 ### Task 1: Health Check Endpoints
 
-**Create `packages/server/src/health/health.controller.ts`**:
+**Create `apps/server/src/health/health.controller.ts`**:
 
 ```typescript
 import { Controller, Get } from '@nestjs/common';

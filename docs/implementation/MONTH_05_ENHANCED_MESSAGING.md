@@ -22,7 +22,7 @@
 
 ### Update Prisma Schema
 
-**Update `packages/server/prisma/schema.prisma`** - Add threading and pinning fields to Message model:
+**Update `apps/server/prisma/schema.prisma`** - Add threading and pinning fields to Message model:
 
 ```prisma
 model Message {
@@ -83,13 +83,13 @@ model User {
 **Generate Migration**:
 
 ```bash
-cd packages/server
+cd apps/server
 npx prisma migrate dev --name add_threading_and_pinning
 ```
 
 ### Threading Service
 
-**Create `packages/server/src/messages/threading.service.ts`**:
+**Create `apps/server/src/messages/threading.service.ts`**:
 
 ```typescript
 import { Injectable, NotFoundException } from '@nestjs/common';
@@ -224,7 +224,7 @@ export class ThreadingService {
 
 ### Pinning Service
 
-**Create `packages/server/src/messages/pinning.service.ts`**:
+**Create `apps/server/src/messages/pinning.service.ts`**:
 
 ```typescript
 import { Injectable, ForbiddenException, BadRequestException } from '@nestjs/common';
@@ -366,7 +366,7 @@ export class PinningService {
 
 ### API Endpoints
 
-**Create `packages/server/src/messages/messages.controller.ts`** (add to existing controller):
+**Create `apps/server/src/messages/messages.controller.ts`** (add to existing controller):
 
 ```typescript
 import { Controller, Post, Get, Delete, Param, Body, Query, UseGuards } from '@nestjs/common';
@@ -505,7 +505,7 @@ export class GiphyService {
 
 ### Scheduled Messages
 
-**Add Prisma Schema** (`packages/server/prisma/schema.prisma`):
+**Add Prisma Schema** (`apps/server/prisma/schema.prisma`):
 
 ```prisma
 enum ScheduledMessageStatus {
@@ -555,11 +555,11 @@ model Channel {
 **Generate Migration**:
 
 ```bash
-cd packages/server
+cd apps/server
 npx prisma migrate dev --name add_scheduled_messages
 ```
 
-**Create `packages/server/src/messages/scheduling.service.ts`**:
+**Create `apps/server/src/messages/scheduling.service.ts`**:
 
 ```typescript
 import { Injectable, Logger } from '@nestjs/common';
@@ -690,7 +690,7 @@ export class SchedulingService {
 **Install @nestjs/schedule**:
 
 ```bash
-cd packages/server
+cd apps/server
 pnpm add @nestjs/schedule
 ```
 
@@ -711,7 +711,7 @@ export class AppModule {}
 
 ### Testing
 
-**Create `packages/server/test/unit/threading.service.spec.ts`**:
+**Create `apps/server/test/unit/threading.service.spec.ts`**:
 
 ```typescript
 import { Test, TestingModule } from '@nestjs/testing';
