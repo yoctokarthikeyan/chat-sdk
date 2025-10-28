@@ -12,11 +12,16 @@ This roadmap outlines a 12-month plan to build and launch a production-ready Cha
 
 #### Week 1-2: Project Setup
 - [ ] Set up monorepo structure (pnpm workspaces)
+  - [ ] `packages/server` - NestJS backend API
+  - [ ] `packages/user-portal` - SaaS customer portal (Next.js)
+  - [ ] `packages/sdk-core` - TypeScript SDK
+  - [ ] `packages/sdk-react` - React SDK
 - [ ] Configure TypeScript, ESLint, Prettier
 - [ ] Set up CI/CD pipeline (GitHub Actions)
 - [ ] Create development environment (Docker Compose)
 - [ ] Set up PostgreSQL and Redis
-- [ ] Initialize NestJS backend project
+- [ ] Initialize NestJS backend project with Prisma ORM
+- [ ] Initialize Next.js user portal project
 - [ ] Set up API documentation (Swagger)
 - [ ] Create project documentation structure
 
@@ -26,7 +31,8 @@ This roadmap outlines a 12-month plan to build and launch a production-ready Cha
 - Basic project structure
 
 #### Week 3-4: Core Backend - Part 1
-- [ ] Database schema design and migration
+- [ ] Database schema design with Prisma
+- [ ] Prisma schema definition and migrations
 - [ ] User authentication (JWT)
 - [ ] User registration and login APIs
 - [ ] Token refresh mechanism
@@ -39,6 +45,8 @@ This roadmap outlines a 12-month plan to build and launch a production-ready Cha
 - [ ] API rate limiting
 - [ ] Error handling middleware
 - [ ] Request validation
+- [ ] User Portal: Authentication pages (login, signup)
+- [ ] User Portal: Dashboard layout
 
 **Deliverables:**
 - Authentication system working
@@ -229,7 +237,7 @@ This roadmap outlines a 12-month plan to build and launch a production-ready Cha
 
 #### Features
 - [ ] **Multi-Tenancy & Teams**
-  - [ ] Team/tenant data model
+  - [ ] Team/tenant data model (Prisma schema)
   - [ ] Team-based data isolation
   - [ ] Team permissions and roles
   - [ ] Team user management
@@ -247,14 +255,20 @@ This roadmap outlines a 12-month plan to build and launch a production-ready Cha
   - [ ] User engagement analytics
   - [ ] Channel activity reports
   - [ ] Team-based analytics
-- [ ] **Admin Dashboard**
-  - [ ] User management UI
+- [ ] **User Portal (SaaS Customer Portal)**
+  - [ ] Team/workspace management UI
+  - [ ] User management interface
   - [ ] Channel management UI
   - [ ] Moderation dashboard
   - [ ] Review queue UI
   - [ ] Block list management
-  - [ ] Audit logs
+  - [ ] Audit logs viewer
   - [ ] Custom event tracking
+  - [ ] API key management
+  - [ ] Billing and subscription management
+  - [ ] Usage analytics dashboard
+  - [ ] Webhook configuration UI
+  - [ ] Settings and preferences
 
 **Deliverables:**
 - Multi-tenancy support
