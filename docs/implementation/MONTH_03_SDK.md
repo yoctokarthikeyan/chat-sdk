@@ -6,15 +6,29 @@
 
 ---
 
+## 🔑 Important: SDK Users (App Users)
+
+The SDK represents **AppUser** (end-users who participate in chat), NOT **CustomerUser** (portal users).
+
+**Key Points:**
+- SDK users are identified by `externalId` (your customer's user ID)
+- No email/password authentication in SDK
+- Your customers create SDK users via their backend
+- All chat operations use `AppUser` model
+
+---
+
 ## Updates for Prisma Migration
 
 **Note**: The SDK is ORM-agnostic and doesn't directly interact with the database. However, type definitions have been updated to match the Prisma schema from Month 2:
 
+- ✅ Updated to use `AppUser` instead of generic `User`
+- ✅ Added `externalId` field for customer user mapping
 - ✅ Updated type enums to match Prisma (e.g., `'REGULAR'` instead of `'regular'`)
+- ✅ Changed `userId` to `appUserId` in relations
 - ✅ Added missing fields like `isDeactivated`, `isShadowBanned`, `parentMessageId`
 - ✅ Updated `Attachment` interface to match Prisma schema
 - ✅ Added comprehensive WebSocket event types
-- ✅ Added API request/response types
 
 All SDK functionality remains the same - only type definitions are aligned with the backend.
 
@@ -106,21 +120,28 @@ packages/sdk-core/src/
 **Create `packages/sdk-core/src/types/index.ts`**:
 
 ```typescript
-// User types - matching backend Prisma schema
-export type UserType = 'REGULAR' | 'ANONYMOUS' | 'GUEST';
+// SDK User types - matching backend AppUser model
+export type UserType = 'REGULAR' | 'ANONYMOUS' | 'GUEST' | 'BOT';
 
-export interface User {
+export interface AppUser {
   id: string;
-  email?: string;
+  appId: string;
+  externalId: string;      // Customer's user ID
   username?: string;
   displayName?: string;
   avatarUrl?: string;
+  bio?: string;
   userType: UserType;
   isDeactivated?: boolean;
+  metadata?: Record<string, any>;
   isOnline?: boolean;
+  lastSeenAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
+
+// Alias for backward compatibility
+export type User = AppUser;
 
 // Channel types - matching backend Prisma schema
 export type ChannelType = 'DIRECT' | 'GROUP' | 'PUBLIC';
@@ -144,11 +165,13 @@ export interface Channel {
 
 export interface ChannelMember {
   id: string;
-  userId: string;
+  appUserId: string;       // Changed from userId
   channelId: string;
   role: MemberRole;
   joinedAt: Date;
   lastReadAt?: Date;
+  unreadCount?: number;
+  isMuted?: boolean;
   isBanned?: boolean;
   isShadowBanned?: boolean;
   isHidden?: boolean;

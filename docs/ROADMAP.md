@@ -30,18 +30,16 @@ This roadmap outlines a 12-month plan to build and launch a production-ready Cha
 - CI/CD pipeline configured
 - Basic project structure
 
-#### Week 3-4: Core Backend - Part 1
+#### Week 3-4: Core Backend - Part 1 (Portal Authentication)
 - [ ] Database schema design with Prisma
 - [ ] Prisma schema definition and migrations
-- [ ] User authentication (JWT)
-- [ ] User registration and login APIs
+- [ ] **CustomerUser** model (portal users)
+- [ ] Portal authentication (JWT)
+- [ ] Customer registration and login APIs
 - [ ] Token refresh mechanism
 - [ ] Token revocation system
-- [ ] Anonymous and guest user support
-- [ ] Developer tokens for testing
-- [ ] Basic user profile APIs
-- [ ] User deactivation/reactivation
-- [ ] Device management APIs
+- [ ] Team management (multi-tenancy)
+- [ ] Application/API key generation
 - [ ] API rate limiting
 - [ ] Error handling middleware
 - [ ] Request validation
@@ -49,23 +47,30 @@ This roadmap outlines a 12-month plan to build and launch a production-ready Cha
 - [ ] User Portal: Dashboard layout
 
 **Deliverables:**
-- Authentication system working
-- User management APIs
+- Portal authentication system working
+- Customer user management APIs
+- Team and application management
 - Database migrations
 - Token management complete
+
+**Note**: This implements **CustomerUser** for portal access. **AppUser** (SDK end-users) will be added in Month 2.
 
 ---
 
 ### Month 2: Core Messaging Features
 
-#### Week 1-2: Messaging Backend
+#### Week 1-2: Messaging Backend (SDK Users)
+- [ ] **AppUser** model (SDK end-users)
+- [ ] AppUserDevice model for push notifications
+- [ ] SDK user creation/update APIs
+- [ ] External ID mapping (customer's user ID)
 - [ ] Channel model and APIs
 - [ ] Create/update/delete channels
 - [ ] Distinct channels (auto-dedupe for DMs)
 - [ ] Frozen channels (read-only mode)
 - [ ] Channel truncation
 - [ ] Hide/show channels
-- [ ] Channel member management
+- [ ] Channel member management (AppUser-based)
 - [ ] Ban/unban users from channels
 - [ ] Shadow ban implementation
 - [ ] Invite accept/reject flow
@@ -86,10 +91,13 @@ This roadmap outlines a 12-month plan to build and launch a production-ready Cha
 - [ ] Resumable uploads
 
 **Deliverables:**
+- AppUser model for SDK end-users
 - REST APIs for channels and messages
 - File upload working
 - Message persistence
 - Advanced channel features
+
+**Note**: All chat features use **AppUser** (SDK users), not CustomerUser (portal users).
 
 #### Week 3-4: Real-time Layer
 - [ ] WebSocket server setup (Socket.io)

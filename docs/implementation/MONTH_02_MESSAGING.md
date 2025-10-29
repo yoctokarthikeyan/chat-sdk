@@ -6,11 +6,97 @@
 
 ---
 
+## 🔑 Important: SDK Users (App Users)
+
+In Month 1, we implemented **CustomerUser** for portal authentication. Now we're adding **AppUser** for SDK end-users who participate in chat.
+
+**Key Differences:**
+- **CustomerUser**: Your customers who manage the portal (email/password login)
+- **AppUser**: Your customers' end-users who use the chat SDK (no portal access)
+
+---
+
 ## Week 1-2: Messaging Backend
 
 ### Prisma Schema Update
 
-**Update `apps/server/prisma/schema.prisma`** (add to existing schema):
+**Update `apps/server/prisma/schema.prisma`** (add to existing schema from Month 1):
+
+```prisma
+// ============================================================================
+// SDK LAYER - End-Users (Chat Participants)
+// ============================================================================
+
+enum UserType {
+  REGULAR
+  ANONYMOUS
+  GUEST
+  BOT
+}
+
+model AppUser {
+  id             String    @id @default(uuid())
+  appId          String    @map("app_id")
+  externalId     String    @map("external_id") // Customer's user ID
+  username       String?
+  displayName    String?   @map("display_name")
+  avatarUrl      String?   @map("avatar_url")
+  bio            String?
+  userType       UserType  @default(REGULAR) @map("user_type")
+  isDeactivated  Boolean   @default(false) @map("is_deactivated")
+  deactivatedAt  DateTime? @map("deactivated_at")
+  metadata       Json      @default("{}")
+  isOnline       Boolean   @default(false) @map("is_online")
+  lastSeenAt     DateTime? @map("last_seen_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  application      Application      @relation(fields: [appId], references: [id], onDelete: Cascade)
+  createdChannels  Channel[]        @relation("CreatedChannels")
+  channelMembers   ChannelMember[]
+  sentMessages     Message[]        @relation("SentMessages")
+  pinnedMessages   Message[]        @relation("PinnedMessages")
+  reactions        MessageReaction[]
+  messageReads     MessageRead[]
+  devices          AppUserDevice[]
+  drafts           MessageDraft[]
+
+  @@unique([appId, externalId])
+  @@index([appId])
+  @@index([appId, externalId])
+  @@index([isOnline])
+  @@index([userType])
+  @@index([isDeactivated])
+  @@map("app_users")
+}
+
+model AppUserDevice {
+  id            String      @id @default(uuid())
+  appUserId     String      @map("app_user_id")
+  deviceId      String      @map("device_id")
+  pushProvider  String?     @map("push_provider") // 'fcm', 'apns', 'web'
+  pushToken     String?     @map("push_token")
+  platform      String?     // 'android', 'ios', 'web'
+  appVersion    String?     @map("app_version")
+  osVersion     String?     @map("os_version")
+  lastActiveAt  DateTime?   @map("last_active_at")
+  registeredAt  DateTime    @default(now()) @map("registered_at")
+
+  appUser AppUser @relation(fields: [appUserId], references: [id], onDelete: Cascade)
+
+  @@unique([appUserId, deviceId])
+  @@index([appUserId])
+  @@index([pushToken])
+  @@index([platform])
+  @@map("app_user_devices")
+}
+
+// ============================================================================
+// CHANNELS & MESSAGES
+// ============================================================================
+```
+
+**Update `apps/server/prisma/schema.prisma`** (continue adding):
 
 ```prisma
 enum ChannelType {
@@ -38,54 +124,71 @@ enum MessageStatus {
 }
 
 model Channel {
-  id          String      @id @default(uuid())
-  type        ChannelType
-  name        String?
-  description String?
-  isDistinct  Boolean     @default(false) @map("is_distinct")
-  isFrozen    Boolean     @default(false) @map("is_frozen")
-  slowMode    Int         @default(0) @map("slow_mode")
-  metadata    Json        @default("{}")
-  createdBy   String?     @map("created_by")
-  createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime    @updatedAt @map("updated_at")
-  truncatedAt DateTime?   @map("truncated_at")
+  id             String      @id @default(uuid())
+  appId          String      @map("app_id")
+  type           ChannelType
+  name           String?
+  description    String?
+  avatarUrl      String?     @map("avatar_url")
+  isDistinct     Boolean     @default(false) @map("is_distinct")
+  isFrozen       Boolean     @default(false) @map("is_frozen")
+  slowMode       Int         @default(0) @map("slow_mode")
+  cooldown       Int         @default(0)
+  metadata       Json        @default("{}")
+  settings       Json        @default("{}")
+  createdBy      String?     @map("created_by")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+  lastMessageAt  DateTime?   @map("last_message_at")
+  truncatedAt    DateTime?   @map("truncated_at")
 
-  creator User?           @relation("CreatedChannels", fields: [createdBy], references: [id])
-  members ChannelMember[]
-  messages Message[]
+  application Application     @relation(fields: [appId], references: [id], onDelete: Cascade)
+  creator     AppUser?        @relation("CreatedChannels", fields: [createdBy], references: [id])
+  members     ChannelMember[]
+  messages    Message[]
+  drafts      MessageDraft[]
 
+  @@index([appId])
   @@index([type])
+  @@index([lastMessageAt])
+  @@index([isDistinct])
+  @@index([isFrozen])
   @@map("channels")
 }
 
 model ChannelMember {
-  id             String    @id @default(uuid())
-  channelId      String    @map("channel_id")
-  userId         String    @map("user_id")
-  role           MemberRole @default(MEMBER)
-  joinedAt       DateTime  @default(now()) @map("joined_at")
-  lastReadAt     DateTime? @map("last_read_at")
-  isBanned       Boolean   @default(false) @map("is_banned")
-  isShadowBanned Boolean   @default(false) @map("is_shadow_banned")
-  isHidden       Boolean   @default(false) @map("is_hidden")
+  id                String     @id @default(uuid())
+  channelId         String     @map("channel_id")
+  appUserId         String     @map("app_user_id")
+  role              MemberRole @default(MEMBER)
+  joinedAt          DateTime   @default(now()) @map("joined_at")
+  lastReadAt        DateTime?  @map("last_read_at")
+  unreadCount       Int       @default(0) @map("unread_count")
+  isMuted           Boolean   @default(false) @map("is_muted")
+  isBanned          Boolean   @default(false) @map("is_banned")
+  isShadowBanned    Boolean   @default(false) @map("is_shadow_banned")
+  bannedAt          DateTime? @map("banned_at")
+  banExpiresAt      DateTime? @map("ban_expires_at")
+  isHidden          Boolean   @default(false) @map("is_hidden")
+  inviteAcceptedAt  DateTime? @map("invite_accepted_at")
+  inviteRejectedAt  DateTime? @map("invite_rejected_at")
 
   channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  user    User    @relation("ChannelMemberships", fields: [userId], references: [id], onDelete: Cascade)
+  appUser AppUser @relation(fields: [appUserId], references: [id], onDelete: Cascade)
 
-  @@unique([channelId, userId])
+  @@unique([channelId, appUserId])
   @@index([channelId])
-  @@index([userId])
+  @@index([appUserId])
   @@map("channel_members")
 }
 
 model Message {
-  id              String        @id @default(uuid())
-  channelId       String        @map("channel_id")
-  userId          String        @map("user_id")
-  parentMessageId String?       @map("parent_message_id")
-  text            String?
-  type            MessageType   @default(TEXT)
+  id                String        @id @default(uuid())
+  channelId         String        @map("channel_id")
+  appUserId         String        @map("app_user_id")
+  parentMessageId   String?       @map("parent_message_id")
+  text              String?
+  type              MessageType   @default(TEXT)
   status          MessageStatus @default(SENT)
   isSilent        Boolean       @default(false) @map("is_silent")
   isPinned        Boolean       @default(false) @map("is_pinned")
@@ -97,15 +200,21 @@ model Message {
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
   channel         Channel             @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  user            User                @relation("SentMessages", fields: [userId], references: [id])
-  parentMessage   Message?            @relation("Replies", fields: [parentMessageId], references: [id])
-  replies         Message[]           @relation("Replies")
+  appUser         AppUser             @relation("SentMessages", fields: [appUserId], references: [id])
+  parentMessage   Message?            @relation("MessageReplies", fields: [parentMessageId], references: [id])
+  replies         Message[]           @relation("MessageReplies")
   quotedMessage   Message?            @relation("QuotedMessages", fields: [quotedMessageId], references: [id])
-  quotedBy        Message[]           @relation("QuotedMessages")
+  quotes          Message[]           @relation("QuotedMessages")
   attachments     MessageAttachment[]
+  reactions       MessageReaction[]
+  reads           MessageRead[]
 
   @@index([channelId, createdAt(sort: Desc)])
-  @@index([userId])
+  @@index([appUserId])
+  @@index([parentMessageId])
+  @@index([quotedMessageId])
+  @@index([status])
+  @@index([isPinned])
   @@map("messages")
 }
 
@@ -122,22 +231,75 @@ model MessageAttachment {
   message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   @@index([messageId])
+  @@index([attachmentType])
   @@map("message_attachments")
 }
-```
 
-**Also update User model** to add relations:
+model MessageReaction {
+  id        String   @id @default(uuid())
+  messageId String   @map("message_id")
+  appUserId String   @map("app_user_id")
+  emoji     String
+  createdAt DateTime @default(now()) @map("created_at")
 
-```prisma
-model User {
-  // ... existing fields ...
-  
-  // Add these relations
-  createdChannels  Channel[]       @relation("CreatedChannels")
-  channelMembers   ChannelMember[] @relation("ChannelMemberships")
-  sentMessages     Message[]       @relation("SentMessages")
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  appUser AppUser @relation(fields: [appUserId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, appUserId, emoji])
+  @@index([messageId])
+  @@index([appUserId])
+  @@map("message_reactions")
+}
+
+model MessageRead {
+  id        String   @id @default(uuid())
+  messageId String   @map("message_id")
+  appUserId String   @map("app_user_id")
+  readAt    DateTime @default(now()) @map("read_at")
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  appUser AppUser @relation(fields: [appUserId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, appUserId])
+  @@index([messageId])
+  @@index([appUserId])
+  @@map("message_reads")
+}
+
+model MessageDraft {
+  id        String   @id @default(uuid())
+  channelId String   @map("channel_id")
+  appUserId String   @map("app_user_id")
+  text      String?
+  mentions  Json     @default("[]")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  appUser AppUser @relation(fields: [appUserId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, appUserId])
+  @@index([appUserId])
+  @@map("message_drafts")
 }
 ```
+
+**Also update Application model** from Month 1 to add relations:
+
+```prisma
+model Application {
+  // ... existing fields from Month 1 ...
+  
+  // Add these relations for Month 2
+  appUsers  AppUser[]
+  channels  Channel[]
+}
+```
+
+**Note**: The complete schema now includes:
+- **CustomerUser** (Month 1) - Portal users
+- **AppUser** (Month 2) - SDK end-users  
+- **Channel**, **Message**, etc. - All reference AppUser
 
 **Generate Migration**:
 

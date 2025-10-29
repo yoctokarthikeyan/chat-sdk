@@ -19,6 +19,17 @@
 
 ---
 
+## 🔑 Important: User Schema Design
+
+This guide implements **CustomerUser** for portal authentication. This represents:
+- **Your customers** who access the User Portal
+- People who manage teams, API keys, and settings
+- Portal login with email/password
+
+The **SDK end-users** (AppUser) who participate in chat will be added in **Month 2** when implementing messaging features.
+
+---
+
 ## Week 1-2: Project Setup
 
 ### Milestone: Development Environment Ready
@@ -537,65 +548,104 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum UserType {
-  REGULAR
-  ANONYMOUS
-  GUEST
-}
+// ============================================================================
+// PORTAL LAYER - Customer Users (Portal Access)
+// ============================================================================
 
-model User {
-  id            String    @id @default(uuid())
-  email         String?   @unique
-  username      String?   @unique
-  passwordHash  String?   @map("password_hash")
-  displayName   String?   @map("display_name")
-  avatarUrl     String?   @map("avatar_url")
-  userType      UserType  @default(REGULAR) @map("user_type")
-  isDeactivated Boolean   @default(false) @map("is_deactivated")
-  deactivatedAt DateTime? @map("deactivated_at")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+model CustomerUser {
+  id               String   @id @default(uuid())
+  email            String   @unique
+  passwordHash     String   @map("password_hash")
+  displayName      String?  @map("display_name")
+  avatarUrl        String?  @map("avatar_url")
+  isEmailVerified  Boolean  @default(false) @map("is_email_verified")
+  emailVerifiedAt  DateTime? @map("email_verified_at")
+  isActive         Boolean  @default(true) @map("is_active")
+  lastLoginAt      DateTime? @map("last_login_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   refreshTokens RefreshToken[]
-  devices       UserDevice[]
+  teams         CustomerUserTeam[]
 
   @@index([email])
-  @@index([username])
-  @@index([userType])
-  @@map("users")
+  @@index([isActive])
+  @@map("customer_users")
+}
+
+enum CustomerUserRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model CustomerUserTeam {
+  id             String           @id @default(uuid())
+  customerUserId String           @map("customer_user_id")
+  teamId         String           @map("team_id")
+  role           CustomerUserRole @default(MEMBER)
+  joinedAt       DateTime         @default(now()) @map("joined_at")
+
+  customerUser CustomerUser @relation(fields: [customerUserId], references: [id], onDelete: Cascade)
+  team         Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([customerUserId, teamId])
+  @@index([customerUserId])
+  @@index([teamId])
+  @@map("customer_user_teams")
 }
 
 model RefreshToken {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  token     String   @unique
-  expiresAt DateTime @map("expires_at")
-  createdAt DateTime @default(now()) @map("created_at")
+  id             String   @id @default(uuid())
+  customerUserId String   @map("customer_user_id")
+  token          String   @unique
+  expiresAt      DateTime @map("expires_at")
+  createdAt      DateTime @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customerUser CustomerUser @relation(fields: [customerUserId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
+  @@index([customerUserId])
   @@index([token])
   @@map("refresh_tokens")
 }
 
-model UserDevice {
-  id           String    @id @default(uuid())
-  userId       String    @map("user_id")
-  deviceId     String    @map("device_id")
-  pushProvider String?   @map("push_provider")
-  pushToken    String?   @map("push_token")
-  isActive     Boolean   @default(true) @map("is_active")
-  lastActiveAt DateTime  @default(now()) @map("last_active_at")
-  createdAt    DateTime  @default(now()) @map("created_at")
+// ============================================================================
+// APPLICATION LAYER - Multi-Tenancy
+// ============================================================================
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+model Team {
+  id        String   @id @default(uuid())
+  appId     String   @map("app_id")
+  name      String
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@unique([userId, deviceId])
-  @@index([userId])
-  @@map("user_devices")
+  application   Application        @relation(fields: [appId], references: [id], onDelete: Cascade)
+  customerUsers CustomerUserTeam[]
+
+  @@index([appId])
+  @@map("teams")
+}
+
+model Application {
+  id        String   @id @default(uuid())
+  name      String
+  apiKey    String   @unique @map("api_key")
+  apiSecret String   @map("api_secret")
+  settings  Json     @default("{}")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  teams Team[]
+
+  @@index([apiKey])
+  @@map("applications")
 }
 ```
+
+**Note**: This schema focuses on **portal authentication** for Month 1. The **SDK layer** (AppUser, channels, messages) will be added in Month 2 when we implement messaging features.
 
 **Generate Prisma Client and Create Migration**:
 
@@ -619,45 +669,46 @@ npx prisma studio
 **Create `apps/server/src/users/types/user.types.ts`**:
 
 ```typescript
-import { User, UserType } from '@prisma/client';
+import { CustomerUser, CustomerUserRole } from '@prisma/client';
 import { Exclude } from 'class-transformer';
 
 // Export Prisma types
-export { User, UserType };
+export { CustomerUser, CustomerUserRole };
 
-// User response DTO (excludes sensitive fields)
-export class UserResponseDto {
+// Customer User response DTO (excludes sensitive fields)
+export class CustomerUserResponseDto {
   id: string;
-  email: string | null;
-  username: string | null;
+  email: string;
   displayName: string | null;
   avatarUrl: string | null;
-  userType: UserType;
-  isDeactivated: boolean;
+  isEmailVerified: boolean;
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 
   @Exclude()
   passwordHash?: string;
 
-  constructor(partial: Partial<User>) {
+  constructor(partial: Partial<CustomerUser>) {
     Object.assign(this, partial);
   }
 }
 
-// Create user DTO
-export class CreateUserDto {
-  email?: string;
-  username?: string;
-  password?: string;
+// Register DTO (for portal signup)
+export class RegisterDto {
+  email: string;
+  password: string;
   displayName?: string;
-  userType?: UserType;
 }
 
-// Update user DTO
-export class UpdateUserDto {
-  email?: string;
-  username?: string;
+// Login DTO
+export class LoginDto {
+  email: string;
+  password: string;
+}
+
+// Update customer user DTO
+export class UpdateCustomerUserDto {
   displayName?: string;
   avatarUrl?: string;
 }

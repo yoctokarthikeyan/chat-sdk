@@ -1,59 +1,144 @@
 # Chat SDK - Database Schema
 
+**Last Updated**: October 29, 2025  
+**Version**: 2.0 (Refactored with separated user types)
+
+---
+
+## Overview
+
+This schema separates two distinct user types:
+1. **customer_users** - Portal users who manage the platform (your customers)
+2. **app_users** - SDK end-users who participate in chat (your customers' users)
+
+---
+
 ## PostgreSQL Schema
 
-### Core Tables
+### Portal Layer - Customer Users
 
-#### **users**
+#### **customer_users**
 ```sql
-CREATE TABLE users (
+CREATE TABLE customer_users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  app_id UUID NOT NULL REFERENCES applications(id),
-  external_id VARCHAR(255) NOT NULL,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  display_name VARCHAR(255),
+  avatar_url TEXT,
+  is_email_verified BOOLEAN DEFAULT false,
+  email_verified_at TIMESTAMP,
+  is_active BOOLEAN DEFAULT true,
+  last_login_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_customer_users_email ON customer_users(email);
+CREATE INDEX idx_customer_users_active ON customer_users(is_active) WHERE is_active = true;
+```
+
+#### **customer_user_teams**
+```sql
+CREATE TABLE customer_user_teams (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_user_id UUID NOT NULL REFERENCES customer_users(id) ON DELETE CASCADE,
+  team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  role VARCHAR(50) NOT NULL DEFAULT 'member', -- 'owner', 'admin', 'member'
+  joined_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(customer_user_id, team_id)
+);
+
+CREATE INDEX idx_customer_user_teams_user ON customer_user_teams(customer_user_id);
+CREATE INDEX idx_customer_user_teams_team ON customer_user_teams(team_id);
+```
+
+#### **refresh_tokens**
+```sql
+CREATE TABLE refresh_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_user_id UUID NOT NULL REFERENCES customer_users(id) ON DELETE CASCADE,
+  token VARCHAR(255) UNIQUE NOT NULL,
+  expires_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(customer_user_id);
+CREATE INDEX idx_refresh_tokens_token ON refresh_tokens(token);
+```
+
+---
+
+### SDK Layer - End-Users
+
+#### **app_users**
+```sql
+CREATE TABLE app_users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  app_id UUID NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+  external_id VARCHAR(255) NOT NULL, -- Customer's user ID
   username VARCHAR(255),
-  email VARCHAR(255),
-  password_hash VARCHAR(255),
   display_name VARCHAR(255),
   avatar_url TEXT,
   bio TEXT,
-  user_type VARCHAR(50) DEFAULT 'regular', -- 'regular', 'anonymous', 'guest'
+  user_type VARCHAR(50) DEFAULT 'regular', -- 'regular', 'anonymous', 'guest', 'bot'
   is_deactivated BOOLEAN DEFAULT false,
   deactivated_at TIMESTAMP,
-  team_id UUID REFERENCES teams(id), -- Multi-tenancy support
   metadata JSONB DEFAULT '{}',
   is_online BOOLEAN DEFAULT false,
   last_seen_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(app_id, external_id),
-  UNIQUE(app_id, email)
+  UNIQUE(app_id, external_id)
 );
 
-CREATE INDEX idx_users_app_id ON users(app_id);
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_online ON users(is_online) WHERE is_online = true;
-CREATE INDEX idx_users_team ON users(team_id);
-CREATE INDEX idx_users_type ON users(user_type);
-CREATE INDEX idx_users_active ON users(is_deactivated) WHERE is_deactivated = false;
+CREATE INDEX idx_app_users_app_id ON app_users(app_id);
+CREATE INDEX idx_app_users_external_id ON app_users(app_id, external_id);
+CREATE INDEX idx_app_users_online ON app_users(is_online) WHERE is_online = true;
+CREATE INDEX idx_app_users_type ON app_users(user_type);
+CREATE INDEX idx_app_users_active ON app_users(is_deactivated) WHERE is_deactivated = false;
 ```
+
+#### **app_user_devices**
+```sql
+CREATE TABLE app_user_devices (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  app_user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  device_id VARCHAR(255) NOT NULL,
+  push_provider VARCHAR(50), -- 'fcm', 'apns', 'web'
+  push_token TEXT,
+  platform VARCHAR(50), -- 'android', 'ios', 'web'
+  app_version VARCHAR(50),
+  os_version VARCHAR(50),
+  last_active_at TIMESTAMP,
+  registered_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(app_user_id, device_id)
+);
+
+CREATE INDEX idx_app_user_devices_user ON app_user_devices(app_user_id);
+CREATE INDEX idx_app_user_devices_push_token ON app_user_devices(push_token);
+CREATE INDEX idx_app_user_devices_platform ON app_user_devices(platform);
+```
+
+---
+
+### Core Tables
 
 #### **channels**
 ```sql
 CREATE TABLE channels (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  app_id UUID NOT NULL REFERENCES applications(id),
+  app_id UUID NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
   type VARCHAR(50) NOT NULL,
   name VARCHAR(255),
   description TEXT,
   avatar_url TEXT,
-  team_id UUID REFERENCES teams(id), -- Multi-tenancy support
   is_distinct BOOLEAN DEFAULT false, -- Auto-dedupe for DMs
   is_frozen BOOLEAN DEFAULT false, -- Read-only mode
   slow_mode INTEGER DEFAULT 0, -- Seconds between messages
   cooldown INTEGER DEFAULT 0, -- Channel-wide rate limit
   metadata JSONB DEFAULT '{}',
   settings JSONB DEFAULT '{}',
-  created_by UUID REFERENCES users(id),
+  created_by UUID REFERENCES app_users(id), -- ✅ Changed from users
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW(),
   last_message_at TIMESTAMP,
@@ -63,7 +148,6 @@ CREATE TABLE channels (
 CREATE INDEX idx_channels_app_id ON channels(app_id);
 CREATE INDEX idx_channels_type ON channels(type);
 CREATE INDEX idx_channels_last_message ON channels(last_message_at DESC);
-CREATE INDEX idx_channels_team ON channels(team_id);
 CREATE INDEX idx_channels_distinct ON channels(is_distinct) WHERE is_distinct = true;
 CREATE INDEX idx_channels_frozen ON channels(is_frozen) WHERE is_frozen = true;
 ```
@@ -73,7 +157,7 @@ CREATE INDEX idx_channels_frozen ON channels(is_frozen) WHERE is_frozen = true;
 CREATE TABLE channel_members (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  app_user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE, -- ✅ Changed from user_id
   role VARCHAR(50) DEFAULT 'member', -- 'owner', 'admin', 'moderator', 'member'
   joined_at TIMESTAMP DEFAULT NOW(),
   last_read_at TIMESTAMP,
@@ -86,11 +170,11 @@ CREATE TABLE channel_members (
   is_hidden BOOLEAN DEFAULT false, -- User-specific channel visibility
   invite_accepted_at TIMESTAMP,
   invite_rejected_at TIMESTAMP,
-  UNIQUE(channel_id, user_id)
+  UNIQUE(channel_id, app_user_id) -- ✅ Changed
 );
 
 CREATE INDEX idx_channel_members_channel ON channel_members(channel_id);
-CREATE INDEX idx_channel_members_user ON channel_members(user_id);
+CREATE INDEX idx_channel_members_user ON channel_members(app_user_id); -- ✅ Changed
 ```
 
 #### **messages**
@@ -98,7 +182,7 @@ CREATE INDEX idx_channel_members_user ON channel_members(user_id);
 CREATE TABLE messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES users(id),
+  app_user_id UUID NOT NULL REFERENCES app_users(id), -- ✅ Changed from user_id
   parent_message_id UUID REFERENCES messages(id),
   text TEXT,
   type VARCHAR(50) DEFAULT 'text', -- 'text', 'image', 'video', 'file', 'system', 'silent', 'pending', 'draft'
@@ -106,7 +190,7 @@ CREATE TABLE messages (
   is_silent BOOLEAN DEFAULT false, -- No push notification
   is_pinned BOOLEAN DEFAULT false,
   pinned_at TIMESTAMP,
-  pinned_by UUID REFERENCES users(id),
+  pinned_by UUID REFERENCES app_users(id), -- ✅ Changed from users
   scheduled_for TIMESTAMP, -- Scheduled messages
   metadata JSONB DEFAULT '{}',
   mentions JSONB DEFAULT '[]',
@@ -121,7 +205,7 @@ CREATE TABLE messages (
 );
 
 CREATE INDEX idx_messages_channel_created ON messages(channel_id, created_at DESC);
-CREATE INDEX idx_messages_user ON messages(user_id);
+CREATE INDEX idx_messages_user ON messages(app_user_id); -- ✅ Changed
 CREATE INDEX idx_messages_parent ON messages(parent_message_id);
 CREATE INDEX idx_messages_text_search ON messages USING gin(to_tsvector('english', text));
 CREATE INDEX idx_messages_quoted ON messages(quoted_message_id);
@@ -157,13 +241,14 @@ CREATE INDEX idx_attachments_type ON message_attachments(attachment_type);
 CREATE TABLE message_reactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  app_user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE, -- ✅ Changed
   emoji VARCHAR(50) NOT NULL,
   created_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(message_id, user_id, emoji)
+  UNIQUE(message_id, app_user_id, emoji) -- ✅ Changed
 );
 
 CREATE INDEX idx_reactions_message ON message_reactions(message_id);
+CREATE INDEX idx_reactions_user ON message_reactions(app_user_id); -- ✅ Changed
 ```
 
 #### **message_reads**
@@ -171,13 +256,13 @@ CREATE INDEX idx_reactions_message ON message_reactions(message_id);
 CREATE TABLE message_reads (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  app_user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE, -- ✅ Changed
   read_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(message_id, user_id)
+  UNIQUE(message_id, app_user_id) -- ✅ Changed
 );
 
 CREATE INDEX idx_reads_message ON message_reads(message_id);
-CREATE INDEX idx_reads_user ON message_reads(user_id);
+CREATE INDEX idx_reads_user ON message_reads(app_user_id); -- ✅ Changed
 ```
 
 #### **teams**
@@ -194,22 +279,20 @@ CREATE TABLE teams (
 CREATE INDEX idx_teams_app_id ON teams(app_id);
 ```
 
-#### **user_devices**
+#### **message_drafts**
 ```sql
-CREATE TABLE user_devices (
+CREATE TABLE message_drafts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  device_id VARCHAR(255) NOT NULL,
-  push_provider VARCHAR(50), -- 'fcm', 'apns'
-  push_token TEXT,
-  platform VARCHAR(50), -- 'android', 'ios', 'web'
-  last_active_at TIMESTAMP,
-  registered_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(user_id, device_id)
+  channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+  app_user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE, -- ✅ Changed
+  text TEXT,
+  mentions JSONB DEFAULT '[]',
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(channel_id, app_user_id) -- ✅ Changed
 );
 
-CREATE INDEX idx_devices_user ON user_devices(user_id);
-CREATE INDEX idx_devices_push_token ON user_devices(push_token);
+CREATE INDEX idx_drafts_user ON message_drafts(app_user_id); -- ✅ Changed
 ```
 
 #### **webhooks**
@@ -344,10 +427,10 @@ CREATE TABLE moderation_queue (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   app_id UUID NOT NULL REFERENCES applications(id),
   message_id UUID REFERENCES messages(id),
-  user_id UUID REFERENCES users(id),
+  app_user_id UUID REFERENCES app_users(id), -- ✅ Changed
   reason VARCHAR(255),
   status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'approved', 'rejected'
-  reviewed_by UUID REFERENCES users(id),
+  reviewed_by UUID REFERENCES customer_users(id), -- ✅ Changed to customer_users
   reviewed_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW()
 );
@@ -356,24 +439,6 @@ CREATE INDEX idx_moderation_queue_app ON moderation_queue(app_id, status);
 CREATE INDEX idx_moderation_queue_message ON moderation_queue(message_id);
 ```
 
-#### **message_drafts**
-```sql
-CREATE TABLE message_drafts (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  text TEXT,
-  mentions JSONB DEFAULT '[]',
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(channel_id, user_id)
-);
-
-CREATE INDEX idx_drafts_user ON message_drafts(user_id);
-
--- Note: Draft attachments can be stored temporarily in message_attachments
--- with a reference to a draft message ID, or handled client-side until message is sent
-```
 
 #### **applications**
 ```sql
@@ -800,31 +865,44 @@ GROUP BY w.id, w.name;
 ### Key Relationships Summary
 
 ```
-applications (1) ──→ (N) webhooks
-webhooks (N) ──→ (M) webhook_event_types (via webhook_subscriptions)
-webhooks (1) ──→ (N) webhook_logs
-webhook_event_types (1) ──→ (N) webhook_subscriptions
+PORTAL LAYER:
+customer_users (1) ──→ (N) refresh_tokens
+customer_users (N) ──→ (M) teams (via customer_user_teams)
+customer_user_teams (junction table)
 
+APPLICATION LAYER:
+teams (1) ──→ (1) applications
+applications (1) ──→ (N) webhooks
+applications (1) ──→ (N) campaigns
+applications (1) ──→ (N) block_lists
+applications (1) ──→ (N) app_users
+
+SDK LAYER:
+app_users (1) ──→ (N) messages
+app_users (1) ──→ (N) app_user_devices
+app_users (1) ──→ (N) channel_members
+app_users (1) ──→ (N) message_reactions
+app_users (1) ──→ (N) message_reads
+app_users (1) ──→ (N) message_drafts
+
+CHANNELS & MESSAGES:
+channels (1) ──→ (N) messages
+channels (1) ──→ (N) channel_members
 messages (1) ──→ (N) message_attachments
 messages (1) ──→ (N) message_reactions
 messages (1) ──→ (N) message_reads
 
-channels (1) ──→ (N) messages
-channels (1) ──→ (N) channel_members
-
-users (1) ──→ (N) messages
-users (1) ──→ (N) user_devices
-users (N) ──→ (1) teams
-
-applications (1) ──→ (N) teams
-applications (1) ──→ (N) campaigns
-applications (1) ──→ (N) block_lists
+WEBHOOKS:
+webhooks (N) ──→ (M) webhook_event_types (via webhook_subscriptions)
+webhooks (1) ──→ (N) webhook_logs
 ```
 
-**Note**: The webhook system uses a many-to-many relationship:
-- One webhook can subscribe to multiple event types
-- One event type can be used by multiple webhooks
-- `webhook_subscriptions` is the junction table connecting them
+**Key Notes**:
+- ✅ **customer_users** manage the portal (your customers)
+- ✅ **app_users** participate in chat (your customers' users)
+- ✅ **customer_user_teams** is a many-to-many junction table
+- ✅ All chat operations reference **app_users**, not customer_users
+- ✅ Moderation is reviewed by **customer_users**
 
 ---
 
