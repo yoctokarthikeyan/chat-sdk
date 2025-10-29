@@ -12,10 +12,10 @@ This roadmap outlines a 12-month plan to build and launch a production-ready Cha
 
 #### Week 1-2: Project Setup
 - [ ] Set up monorepo structure (pnpm workspaces)
-  - [ ] `packages/server` - NestJS backend API
-  - [ ] `packages/user-portal` - SaaS customer portal (Next.js)
-  - [ ] `packages/sdk-core` - TypeScript SDK
-  - [ ] `packages/sdk-react` - React SDK
+  - [ ] `apps/server` - NestJS backend API (deployable)
+  - [ ] `apps/user-portal` - SaaS customer portal (Next.js, deployable)
+  - [ ] `packages/sdk-core` - TypeScript SDK (shared library)
+  - [ ] `packages/sdk-react` - React SDK (shared library)
 - [ ] Configure TypeScript, ESLint, Prettier
 - [ ] Set up CI/CD pipeline (GitHub Actions)
 - [ ] Create development environment (Docker Compose)

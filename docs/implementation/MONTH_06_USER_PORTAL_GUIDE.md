@@ -25,7 +25,7 @@ The User Portal is a self-service web application for Chat SDK customers to mana
 ### 1. Initialize User Portal (if not done in Month 1)
 
 ```bash
-cd packages/user-portal
+cd apps/user-portal
 pnpm install
 ```
 
@@ -49,7 +49,7 @@ npx shadcn-ui@latest add form toast alert badge avatar separator
 ## Project Structure
 
 ```
-packages/user-portal/
+apps/user-portal/
 ├── app/
 │   ├── (auth)/
 │   │   ├── login/page.tsx
