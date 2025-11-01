@@ -485,6 +485,107 @@ CREATE TABLE usage_metrics (
 CREATE INDEX idx_usage_app_time ON usage_metrics(app_id, timestamp DESC);
 ```
 
+---
+
+### End-to-End Encryption Tables
+
+#### **user_encryption_keys**
+```sql
+CREATE TABLE user_encryption_keys (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  app_user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  device_id VARCHAR(255) NOT NULL,
+  
+  -- Identity Key (permanent)
+  identity_public_key TEXT NOT NULL,
+  
+  -- Signed Pre-Key (rotates every 30 days)
+  signed_prekey_id INTEGER NOT NULL,
+  signed_prekey_public TEXT NOT NULL,
+  signed_prekey_signature TEXT NOT NULL,
+  
+  -- Metadata
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  
+  UNIQUE(app_user_id, device_id)
+);
+
+CREATE INDEX idx_user_encryption_keys_user ON user_encryption_keys(app_user_id);
+CREATE INDEX idx_user_encryption_keys_device ON user_encryption_keys(device_id);
+```
+
+#### **one_time_prekeys**
+```sql
+CREATE TABLE one_time_prekeys (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  app_user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  device_id VARCHAR(255) NOT NULL,
+  prekey_id INTEGER NOT NULL,
+  public_key TEXT NOT NULL,
+  is_used BOOLEAN DEFAULT false,
+  used_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW(),
+  
+  UNIQUE(app_user_id, device_id, prekey_id)
+);
+
+CREATE INDEX idx_one_time_prekeys_user_device ON one_time_prekeys(app_user_id, device_id);
+CREATE INDEX idx_one_time_prekeys_unused ON one_time_prekeys(app_user_id, device_id, is_used) 
+  WHERE is_used = false;
+```
+
+#### **encrypted_messages**
+```sql
+CREATE TABLE encrypted_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  recipient_device_id VARCHAR(255) NOT NULL,
+  
+  -- Encrypted content
+  ciphertext TEXT NOT NULL,
+  
+  -- Key exchange info (for first message)
+  ephemeral_public_key TEXT,
+  used_prekey_id INTEGER,
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  
+  UNIQUE(message_id, recipient_device_id)
+);
+
+CREATE INDEX idx_encrypted_messages_message ON encrypted_messages(message_id);
+CREATE INDEX idx_encrypted_messages_device ON encrypted_messages(recipient_device_id);
+```
+
+#### **encryption_sessions**
+```sql
+CREATE TABLE encryption_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  app_user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  device_id VARCHAR(255) NOT NULL,
+  peer_user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  peer_device_id VARCHAR(255) NOT NULL,
+  
+  -- Session state (encrypted, only client can decrypt)
+  session_state TEXT NOT NULL,
+  
+  -- Metadata
+  last_message_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  
+  UNIQUE(app_user_id, device_id, peer_user_id, peer_device_id)
+);
+
+CREATE INDEX idx_encryption_sessions_user ON encryption_sessions(app_user_id, device_id);
+CREATE INDEX idx_encryption_sessions_peer ON encryption_sessions(peer_user_id, peer_device_id);
+```
+
+**Note**: See [E2E_ENCRYPTION.md](./E2E_ENCRYPTION.md) for complete E2EE implementation details.
+
+---
+
 ## Redis Data Structures
 
 ### User Presence

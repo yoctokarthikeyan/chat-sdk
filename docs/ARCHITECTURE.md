@@ -277,7 +277,12 @@ Object Storage: Multi-region replication
 
 **Data Security**
 - Encrypted at rest (database)
-- Optional E2E encryption for messages
+- **End-to-End Encryption (E2EE)** - Signal Protocol implementation
+  - X3DH key exchange
+  - Double Ratchet algorithm
+  - Perfect forward secrecy
+  - Post-compromise security
+  - See [E2E_ENCRYPTION.md](./E2E_ENCRYPTION.md) for details
 - Secure media URLs (signed)
 - PII data encryption
 

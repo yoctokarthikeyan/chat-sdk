@@ -220,9 +220,11 @@ This roadmap outlines a 12-month plan to build and launch a production-ready Cha
 
 ## Phase 2: Growth Features (Months 5-8)
 
-### Month 5: Enhanced Messaging
+### Month 5: Enhanced Messaging & E2E Encryption
 
 #### Features
+
+**Enhanced Messaging:**
 - [ ] Message threading (replies)
 - [ ] Message pinning
 - [ ] Message bookmarks
@@ -234,10 +236,39 @@ This roadmap outlines a 12-month plan to build and launch a production-ready Cha
 - [ ] Message forwarding
 - [ ] Message scheduling
 
+**End-to-End Encryption (E2EE):**
+- [ ] **Core Encryption**
+  - [ ] X3DH key exchange implementation
+  - [ ] Double Ratchet algorithm
+  - [ ] Key generation and storage
+  - [ ] Database schema for encryption keys
+- [ ] **API Integration**
+  - [ ] Key management endpoints
+  - [ ] Encrypted message endpoints
+  - [ ] Key rotation logic
+  - [ ] One-time pre-key replenishment
+- [ ] **SDK Integration**
+  - [ ] EncryptionManager class
+  - [ ] Secure storage adapters (Web, iOS, Android)
+  - [ ] Multi-device support
+  - [ ] Session management
+- [ ] **UI/UX**
+  - [ ] Encryption indicators
+  - [ ] Key verification UI
+  - [ ] Device management
+  - [ ] Safety numbers display
+- [ ] **Testing & Security**
+  - [ ] Unit tests for encryption
+  - [ ] Integration tests
+  - [ ] Security audit
+  - [ ] Performance testing
+
 **Deliverables:**
 - Advanced messaging features
+- Complete E2EE implementation (Signal Protocol)
 - Better user experience
-- Increased engagement
+- Enhanced security and privacy
+- See [E2E_ENCRYPTION.md](./E2E_ENCRYPTION.md) for details
 
 ---
 
