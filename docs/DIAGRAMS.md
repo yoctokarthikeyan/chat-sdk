@@ -213,38 +213,119 @@
 
 ## 5. Database Schema Relationships
 
+### **Schema v2.0 - Separated User Types**
+
+This schema separates **customer_users** (portal users) from **app_users** (SDK end-users).
+
 ```
+PORTAL LAYER (Customer Management)
+═══════════════════════════════════
+
+┌──────────────────┐
+│ customer_users   │ ◄─── Your customers who manage the platform
+│  ──────────────  │
+│  • id (PK)       │
+│  • email         │
+│  • password_hash │
+│  • display_name  │
+│  • is_active     │
+└────────┬─────────┘
+         │
+         │ 1:N
+         │
+┌────────▼─────────┐
+│ refresh_tokens   │
+│  ──────────────  │
+│  • id (PK)       │
+│  • customer_user_id (FK)
+│  • token         │
+│  • expires_at    │
+└──────────────────┘
+
+┌──────────────────┐         ┌──────────────────────┐
+│ customer_users   │         │       teams          │
+│  ──────────────  │         │  ──────────────────  │
+│  • id (PK)       │         │  • id (PK)           │
+└────────┬─────────┘         │  • app_id (FK)       │
+         │                   │  • name              │
+         │ N:M               └──────────┬───────────┘
+         │                              │
+         │  ┌───────────────────────┐   │
+         └──► customer_user_teams   │◄──┘
+            │  ───────────────────  │
+            │  • id (PK)            │
+            │  • customer_user_id(FK)
+            │  • team_id (FK)       │
+            │  • role               │
+            └───────────────────────┘
+
+
+APPLICATION LAYER
+═════════════════
+
 ┌─────────────────┐
 │  applications   │
 │  ─────────────  │
 │  • id (PK)      │
 │  • name         │
 │  • api_key      │
+│  • api_secret   │
 │  • plan_id (FK) │
+│  • is_active    │
 └────────┬────────┘
          │
-         │ 1:N
-         │
-┌────────▼────────┐         ┌─────────────────┐
-│     users       │         │    channels     │
+         ├──────────────────────┬──────────────────┬──────────────────┐
+         │ 1:N                  │ 1:N              │ 1:N              │ 1:N
+         │                      │                  │                  │
+┌────────▼────────┐   ┌─────────▼────────┐  ┌─────▼──────┐  ┌───────▼────────┐
+│   app_users     │   │    channels      │  │  webhooks  │  │   campaigns    │
+│  ─────────────  │   │  ──────────────  │  │  ────────  │  │  ────────────  │
+│  • id (PK)      │   │  • id (PK)       │  │  • id (PK) │  │  • id (PK)     │
+│  • app_id (FK)  │   │  • app_id (FK)   │  │  • app_id  │  │  • app_id (FK) │
+│  • external_id  │   │  • type          │  │  • name    │  │  • name        │
+│  • username     │   │  • name          │  │  • url     │  │  • message     │
+│  • display_name │   │  • created_by(FK)│  │  • type    │  │  • status      │
+│  • user_type    │   │  • is_frozen     │  └────────────┘  └────────────────┘
+│  • is_online    │   └─────────┬────────┘
+└────────┬────────┘             │
+         │                      │
+         │ 1:N                  │
+         │                      │
+┌────────▼────────┐             │
+│app_user_devices │             │
+│  ─────────────  │             │
+│  • id (PK)      │             │
+│  • app_user_id  │             │
+│  • device_id    │             │
+│  • push_token   │             │
+│  • platform     │             │
+└─────────────────┘             │
+
+
+SDK LAYER (Chat Features)
+══════════════════════════
+
+┌─────────────────┐         ┌─────────────────┐
+│   app_users     │         │    channels     │
 │  ─────────────  │         │  ─────────────  │
 │  • id (PK)      │         │  • id (PK)      │
 │  • app_id (FK)  │         │  • app_id (FK)  │
-│  • username     │         │  • type         │
-│  • email        │         │  • name         │
-│  • is_online    │         │  • created_by   │
+│  • external_id  │         │  • type         │
+│  • is_online    │         │  • name         │
 └────────┬────────┘         └────────┬────────┘
          │                           │
          │ N:M                       │
          │                           │
          │    ┌──────────────────┐   │
-         └────►channel_members   │◄──┘
+         └────► channel_members  │◄──┘
               │  ──────────────  │
               │  • id (PK)       │
               │  • channel_id(FK)│
-              │  • user_id (FK)  │
+              │  • app_user_id(FK) ◄─── Changed from user_id
               │  • role          │
               │  • unread_count  │
+              │  • is_muted      │
+              │  • is_banned     │
               └────────┬─────────┘
                        │
                        │ 1:N
@@ -254,24 +335,76 @@
               │  ──────────────  │
               │  • id (PK)       │
               │  • channel_id(FK)│
-              │  • user_id (FK)  │
+              │  • app_user_id(FK) ◄─── Changed from user_id
               │  • text          │
-              │  • attachments   │
+              │  • type          │
+              │  • is_pinned     │
+              │  • is_deleted    │
               └────────┬─────────┘
                        │
                        │ 1:N
                        │
-         ┌─────────────┴─────────────┐
-         │                           │
-┌────────▼────────┐      ┌───────────▼──────┐
-│message_reactions│      │  message_reads   │
-│  ──────────────│      │  ──────────────  │
-│  • id (PK)      │      │  • id (PK)       │
-│  • message_id(FK)│     │  • message_id(FK)│
-│  • user_id (FK) │      │  • user_id (FK)  │
-│  • emoji        │      │  • read_at       │
-└─────────────────┘      └──────────────────┘
+         ┌─────────────┼─────────────┬─────────────────┐
+         │             │             │                 │
+┌────────▼────────┐ ┌──▼──────────┐ ┌▼──────────────┐ ┌▼──────────────┐
+│message_         │ │message_     │ │message_reads  │ │message_drafts │
+│attachments      │ │reactions    │ │  ───────────  │ │  ───────────  │
+│  ─────────────  │ │  ─────────  │ │  • id (PK)    │ │  • id (PK)    │
+│  • id (PK)      │ │  • id (PK)  │ │  • message_id │ │  • channel_id │
+│  • message_id   │ │  • msg_id   │ │  • app_user_id│ │  • app_user_id│
+│  • type         │ │  • app_user │ │  • read_at    │ │  • text       │
+│  • url          │ │  • emoji    │ └───────────────┘ └───────────────┘
+│  • file_size    │ └─────────────┘
+└─────────────────┘
+
+
+MODERATION LAYER
+════════════════
+
+┌──────────────────┐
+│ moderation_queue │
+│  ──────────────  │
+│  • id (PK)       │
+│  • app_id (FK)   │
+│  • message_id(FK)│
+│  • app_user_id(FK) ◄─── SDK user being moderated
+│  • reviewed_by(FK) ◄─── customer_user who reviews
+│  • status        │
+└──────────────────┘
 ```
+
+### **Key Relationships:**
+
+**Portal Layer:**
+- `customer_users` (1) → (N) `refresh_tokens`
+- `customer_users` (N) → (M) `teams` via `customer_user_teams`
+
+**Application Layer:**
+- `teams` (1) → (1) `applications`
+- `applications` (1) → (N) `app_users`
+- `applications` (1) → (N) `channels`
+- `applications` (1) → (N) `webhooks`
+- `applications` (1) → (N) `campaigns`
+
+**SDK Layer (Chat):**
+- `app_users` (1) → (N) `app_user_devices`
+- `app_users` (1) → (N) `messages`
+- `app_users` (1) → (N) `channel_members`
+- `app_users` (1) → (N) `message_reactions`
+- `app_users` (1) → (N) `message_reads`
+- `app_users` (1) → (N) `message_drafts`
+- `channels` (1) → (N) `messages`
+- `channels` (1) → (N) `channel_members`
+- `messages` (1) → (N) `message_attachments`
+- `messages` (1) → (N) `message_reactions`
+- `messages` (1) → (N) `message_reads`
+
+**Important Notes:**
+- ✅ **customer_users** = Portal users (your customers)
+- ✅ **app_users** = SDK end-users (your customers' users)
+- ✅ All chat features reference **app_users**, not customer_users
+- ✅ Moderation reviewed by **customer_users**
+- ✅ **external_id** in app_users maps to customer's user system
 
 ---
 
