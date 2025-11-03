@@ -21,12 +21,16 @@
 
 ## 🔑 Important: User Schema Design
 
-This guide implements **CustomerUser** for portal authentication. This represents:
-- **Your customers** who access the User Portal
-- People who manage teams, API keys, and settings
-- Portal login with email/password
+This guide implements the **Customer → Member → App** hierarchy:
+- **Customer**: Organization/company account (your customers)
+- **Member**: Portal users who manage the platform (belong to a Customer)
+- **Application**: Chat app instances (belong to a Customer)
 
-The **SDK end-users** (AppUser) who participate in chat will be added in **Month 2** when implementing messaging features.
+**Key Points:**
+- Members authenticate with email/password to access the User Portal
+- Members can have customer-level roles (Owner, Admin) or app-level roles (Developer, Viewer)
+- API keys are generated per Application with publishable and secret keys
+- The **SDK end-users** (AppUser) who participate in chat will be added in **Month 2**
 
 ---
 
@@ -549,103 +553,262 @@ datasource db {
 }
 
 // ============================================================================
-// PORTAL LAYER - Customer Users (Portal Access)
+// CORE HIERARCHY - Customer → Member → App
 // ============================================================================
 
-model CustomerUser {
-  id               String   @id @default(uuid())
-  email            String   @unique
-  passwordHash     String   @map("password_hash")
-  displayName      String?  @map("display_name")
-  avatarUrl        String?  @map("avatar_url")
-  isEmailVerified  Boolean  @default(false) @map("is_email_verified")
-  emailVerifiedAt  DateTime? @map("email_verified_at")
-  isActive         Boolean  @default(true) @map("is_active")
-  lastLoginAt      DateTime? @map("last_login_at")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
-
-  refreshTokens RefreshToken[]
-  teams         CustomerUserTeam[]
-
+model Customer {
+  id                 String   @id @default(cuid())
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+  
+  // Customer information
+  name               String
+  email              String   @unique
+  phone              String?
+  website            String?
+  
+  // Billing information
+  billingEmail       String?  @map("billing_email")
+  billingAddress     String?  @map("billing_address")
+  taxId              String?  @map("tax_id")
+  
+  // External integration (e.g., ChargeBee, Stripe)
+  externalBillingId  String?  @unique @map("external_billing_id")
+  
+  // Relationships
+  members            Member[]
+  applications       Application[]
+  memberCustomerRoles MemberCustomerRole[]
+  
   @@index([email])
+  @@map("customers")
+}
+
+model Member {
+  id                        String    @id @default(cuid())
+  createdAt                 DateTime  @default(now()) @map("created_at")
+  updatedAt                 DateTime  @updatedAt @map("updated_at")
+  
+  // Member information
+  email                     String
+  name                      String
+  passwordHash              String?   @map("password_hash")
+  avatarUrl                 String?   @map("avatar_url")
+  lastLoginAt               DateTime? @map("last_login_at")
+  isActive                  Boolean   @default(true) @map("is_active")
+  
+  // Email verification
+  emailVerified             Boolean   @default(false) @map("email_verified")
+  emailVerificationToken    String?   @map("email_verification_token")
+  emailVerificationExpires  DateTime? @map("email_verification_expires")
+  
+  // Password reset
+  passwordResetToken        String?   @map("password_reset_token")
+  passwordResetExpires      DateTime? @map("password_reset_expires")
+  
+  // Authentication
+  authProvider              String?   @map("auth_provider") // 'email', 'google', 'github'
+  authProviderId            String?   @map("auth_provider_id")
+  
+  // Super Admin flag (platform-wide access)
+  isSuperAdmin              Boolean   @default(false) @map("is_super_admin")
+  
+  // Relationships
+  customerId                String    @map("customer_id")
+  customer                  Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  refreshTokens             RefreshToken[]
+  memberAppRoles            MemberAppRole[]
+  memberCustomerRoles       MemberCustomerRole[]
+  
+  @@unique([email, customerId])
+  @@index([email])
+  @@index([customerId])
   @@index([isActive])
-  @@map("customer_users")
-}
-
-enum CustomerUserRole {
-  OWNER
-  ADMIN
-  MEMBER
-}
-
-model CustomerUserTeam {
-  id             String           @id @default(uuid())
-  customerUserId String           @map("customer_user_id")
-  teamId         String           @map("team_id")
-  role           CustomerUserRole @default(MEMBER)
-  joinedAt       DateTime         @default(now()) @map("joined_at")
-
-  customerUser CustomerUser @relation(fields: [customerUserId], references: [id], onDelete: Cascade)
-  team         Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
-
-  @@unique([customerUserId, teamId])
-  @@index([customerUserId])
-  @@index([teamId])
-  @@map("customer_user_teams")
+  @@map("members")
 }
 
 model RefreshToken {
-  id             String   @id @default(uuid())
-  customerUserId String   @map("customer_user_id")
-  token          String   @unique
-  expiresAt      DateTime @map("expires_at")
-  createdAt      DateTime @default(now()) @map("created_at")
-
-  customerUser CustomerUser @relation(fields: [customerUserId], references: [id], onDelete: Cascade)
-
-  @@index([customerUserId])
-  @@index([token])
+  id         String    @id @default(cuid())
+  createdAt  DateTime  @default(now()) @map("created_at")
+  
+  // Token information
+  token      String    @unique
+  expiresAt  DateTime  @map("expires_at")
+  isRevoked  Boolean   @default(false) @map("is_revoked")
+  revokedAt  DateTime? @map("revoked_at")
+  
+  // Device/session information
+  userAgent  String?   @map("user_agent")
+  ipAddress  String?   @map("ip_address")
+  
+  // Relationships
+  memberId   String    @map("member_id")
+  member     Member    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  
+  @@index([memberId])
+  @@index([token, expiresAt])
   @@map("refresh_tokens")
 }
 
-// ============================================================================
-// APPLICATION LAYER - Multi-Tenancy
-// ============================================================================
-
-model Team {
-  id        String   @id @default(uuid())
-  appId     String   @map("app_id")
-  name      String
-  metadata  Json     @default("{}")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  application   Application        @relation(fields: [appId], references: [id], onDelete: Cascade)
-  customerUsers CustomerUserTeam[]
-
-  @@index([appId])
-  @@map("teams")
+model Application {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  // App information
+  name        String
+  description String?
+  
+  // Environment configuration
+  environment String   @default("PRODUCTION") // 'PRODUCTION', 'TEST'
+  
+  // Settings
+  settings    Json?    @default("{}")
+  
+  // Relationships
+  customerId  String   @map("customer_id")
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  apiKeys     ApiKey[]
+  memberAppRoles MemberAppRole[]
+  
+  @@unique([customerId, name])
+  @@index([customerId])
+  @@map("applications")
 }
 
-model Application {
-  id        String   @id @default(uuid())
-  name      String
-  apiKey    String   @unique @map("api_key")
-  apiSecret String   @map("api_secret")
-  settings  Json     @default("{}")
-  isActive  Boolean  @default(true) @map("is_active")
+model ApiKey {
+  id              String    @id @default(cuid())
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  // Key information
+  publishableKey  String    @unique @map("publishable_key") // pk_chat_test_xxx or pk_chat_live_xxx
+  secretKey       String    @unique @map("secret_key")      // sk_chat_test_xxx or sk_chat_live_xxx (hashed)
+  
+  // Status
+  isActive        Boolean   @default(true) @map("is_active")
+  lastUsedAt      DateTime? @map("last_used_at")
+  
+  // Key rotation
+  expiresAt       DateTime? @map("expires_at")
+  
+  // Relationships
+  appId           String    @map("app_id")
+  app             Application @relation(fields: [appId], references: [id], onDelete: Cascade)
+  
+  @@index([appId])
+  @@index([publishableKey])
+  @@index([secretKey])
+  @@map("api_keys")
+}
+
+// ============================================================================
+// RBAC (Role-Based Access Control)
+// ============================================================================
+
+enum RoleScope {
+  PLATFORM  // Super Admin only - platform-wide access
+  CUSTOMER  // Owner, Admin - customer-level access
+  APP       // Developer, Viewer - app-level access
+}
+
+model Role {
+  id                  String   @id @default(cuid())
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  
+  // Role information
+  name                String   @unique
+  description         String?
+  isSystemRole        Boolean  @default(false) @map("is_system_role")
+  
+  // RBAC configuration
+  scope               RoleScope @default(APP)
+  hierarchyLevel      Int      @default(0) @map("hierarchy_level") // 100=Super Admin, 80=Owner, 60=Admin, 40=Developer, 20=Viewer
+  
+  // Relationships
+  permissions         RolePermission[]
+  memberAppRoles      MemberAppRole[]
+  memberCustomerRoles MemberCustomerRole[]
+  
+  @@index([scope])
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  // Permission information
+  name        String   @unique
+  description String?
+  
+  // Relationships
+  rolePermissions RolePermission[]
+  
+  @@index([name])
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now()) @map("created_at")
+  
+  // CASL conditions for Prisma WHERE clauses
+  conditions   Json?    // Store CASL conditions for @casl/prisma
+  
+  // Relationships
+  roleId       String   @map("role_id")
+  role         Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String   @map("permission_id")
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model MemberCustomerRole {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  
+  // Relationships
+  memberId   String   @map("member_id")
+  member     Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  customerId String   @map("customer_id")
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  roleId     String   @map("role_id")
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  
+  @@unique([memberId, customerId])
+  @@index([memberId])
+  @@index([customerId])
+  @@map("member_customer_roles")
+}
+
+model MemberAppRole {
+  id        String   @id @default(cuid())
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
-
-  teams Team[]
-
-  @@index([apiKey])
-  @@map("applications")
+  
+  // Relationships
+  memberId  String   @map("member_id")
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  appId     String   @map("app_id")
+  app       Application @relation(fields: [appId], references: [id], onDelete: Cascade)
+  roleId    String   @map("role_id")
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  
+  @@unique([memberId, appId, roleId])
+  @@index([memberId])
+  @@index([appId])
+  @@map("member_app_roles")
 }
 ```
 
-**Note**: This schema focuses on **portal authentication** for Month 1. The **SDK layer** (AppUser, channels, messages) will be added in Month 2 when we implement messaging features.
+**Note**: This schema implements the **Customer → Member → App** hierarchy with full RBAC support. The **SDK layer** (AppUser, channels, messages) will be added in Month 2 when we implement messaging features.
 
 **Generate Prisma Client and Create Migration**:
 
@@ -669,36 +832,61 @@ npx prisma studio
 **Create `apps/server/src/users/types/user.types.ts`**:
 
 ```typescript
-import { CustomerUser, CustomerUserRole } from '@prisma/client';
+import { Member, Customer, RoleScope } from '@prisma/client';
 import { Exclude } from 'class-transformer';
 
 // Export Prisma types
-export { CustomerUser, CustomerUserRole };
+export { Member, Customer, RoleScope };
 
-// Customer User response DTO (excludes sensitive fields)
-export class CustomerUserResponseDto {
+// Member response DTO (excludes sensitive fields)
+export class MemberResponseDto {
   id: string;
   email: string;
-  displayName: string | null;
+  name: string;
   avatarUrl: string | null;
-  isEmailVerified: boolean;
+  emailVerified: boolean;
   isActive: boolean;
+  isSuperAdmin: boolean;
+  customerId: string;
   createdAt: Date;
   updatedAt: Date;
 
   @Exclude()
   passwordHash?: string;
+  
+  @Exclude()
+  emailVerificationToken?: string;
+  
+  @Exclude()
+  passwordResetToken?: string;
 
-  constructor(partial: Partial<CustomerUser>) {
+  constructor(partial: Partial<Member>) {
     Object.assign(this, partial);
   }
 }
 
-// Register DTO (for portal signup)
-export class RegisterDto {
+// Customer response DTO
+export class CustomerResponseDto {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  website: string | null;
+  billingEmail: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+
+  constructor(partial: Partial<Customer>) {
+    Object.assign(this, partial);
+  }
+}
+
+// Create member DTO
+export class CreateMemberDto {
   email: string;
   password: string;
-  displayName?: string;
+  name: string;
+  customerId: string;
 }
 
 // Login DTO
@@ -707,10 +895,18 @@ export class LoginDto {
   password: string;
 }
 
-// Update customer user DTO
-export class UpdateCustomerUserDto {
-  displayName?: string;
+// Update member DTO
+export class UpdateMemberDto {
+  name?: string;
   avatarUrl?: string;
+}
+
+// Create customer DTO
+export class CreateCustomerDto {
+  name: string;
+  email: string;
+  phone?: string;
+  website?: string;
 }
 ```
 

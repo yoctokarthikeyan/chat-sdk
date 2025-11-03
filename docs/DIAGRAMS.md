@@ -213,22 +213,34 @@
 
 ## 5. Database Schema Relationships
 
-### **Schema v2.0 - Separated User Types**
+### **Schema v3.0 - Customer → Member → App Hierarchy**
 
-This schema separates **customer_users** (portal users) from **app_users** (SDK end-users).
+This schema follows the **Customer → Member → App** hierarchy pattern from Dropper.
 
 ```
-PORTAL LAYER (Customer Management)
-═══════════════════════════════════
+CORE HIERARCHY (Customer → Member → App)
+═════════════════════════════════════════
 
 ┌──────────────────┐
-│ customer_users   │ ◄─── Your customers who manage the platform
+│    customers     │ ◄─── Organizations/companies (your customers)
 │  ──────────────  │
 │  • id (PK)       │
+│  • name          │
 │  • email         │
+│  • billing_email │
+└────────┬─────────┘
+         │
+         │ 1:N
+         │
+┌────────▼─────────┐
+│     members      │ ◄─── Portal users who manage the platform
+│  ──────────────  │
+│  • id (PK)       │
+│  • customer_id(FK)
+│  • email         │
+│  • name          │
 │  • password_hash │
-│  • display_name  │
-│  • is_active     │
+│  • is_super_admin│
 └────────┬─────────┘
          │
          │ 1:N
@@ -237,56 +249,42 @@ PORTAL LAYER (Customer Management)
 │ refresh_tokens   │
 │  ──────────────  │
 │  • id (PK)       │
-│  • customer_user_id (FK)
+│  • member_id (FK)│
 │  • token         │
 │  • expires_at    │
 └──────────────────┘
 
-┌──────────────────┐         ┌──────────────────────┐
-│ customer_users   │         │       teams          │
-│  ──────────────  │         │  ──────────────────  │
-│  • id (PK)       │         │  • id (PK)           │
-└────────┬─────────┘         │  • app_id (FK)       │
-         │                   │  • name              │
-         │ N:M               └──────────┬───────────┘
-         │                              │
-         │  ┌───────────────────────┐   │
-         └──► customer_user_teams   │◄──┘
-            │  ───────────────────  │
-            │  • id (PK)            │
-            │  • customer_user_id(FK)
-            │  • team_id (FK)       │
-            │  • role               │
-            └───────────────────────┘
-
-
-APPLICATION LAYER
-═════════════════
-
-┌─────────────────┐
-│  applications   │
-│  ─────────────  │
-│  • id (PK)      │
-│  • name         │
-│  • api_key      │
-│  • api_secret   │
-│  • plan_id (FK) │
-│  • is_active    │
-└────────┬────────┘
+┌──────────────────┐
+│    customers     │
+│  ──────────────  │
+│  • id (PK)       │
+└────────┬─────────┘
+         │
+         │ 1:N
+         │
+┌────────▼─────────┐
+│  applications    │ ◄─── Chat app instances
+│  ──────────────  │
+│  • id (PK)       │
+│  • customer_id(FK)
+│  • name          │
+│  • environment   │
+│  • settings      │
+└────────┬─────────┘
          │
          ├──────────────────────┬──────────────────┬──────────────────┐
          │ 1:N                  │ 1:N              │ 1:N              │ 1:N
          │                      │                  │                  │
-┌────────▼────────┐   ┌─────────▼────────┐  ┌─────▼──────┐  ┌───────▼────────┐
-│   app_users     │   │    channels      │  │  webhooks  │  │   campaigns    │
-│  ─────────────  │   │  ──────────────  │  │  ────────  │  │  ────────────  │
-│  • id (PK)      │   │  • id (PK)       │  │  • id (PK) │  │  • id (PK)     │
-│  • app_id (FK)  │   │  • app_id (FK)   │  │  • app_id  │  │  • app_id (FK) │
-│  • external_id  │   │  • type          │  │  • name    │  │  • name        │
-│  • username     │   │  • name          │  │  • url     │  │  • message     │
-│  • display_name │   │  • created_by(FK)│  │  • type    │  │  • status      │
-│  • user_type    │   │  • is_frozen     │  └────────────┘  └────────────────┘
-│  • is_online    │   └─────────┬────────┘
+┌────────▼────────┐   ┌─────────▼────────┐  ┌─────▼──────────┐  ┌───────▼────────┐
+│   app_users     │   │    channels      │  │  webhook_      │  │   campaigns    │
+│  ─────────────  │   │  ──────────────  │  │  endpoints     │  │  ────────────  │
+│  • id (PK)      │   │  • id (PK)       │  │  ────────────  │  │  • id (PK)     │
+│  • app_id (FK)  │   │  • app_id (FK)   │  │  • id (PK)     │  │  • app_id (FK) │
+│  • external_id  │   │  • type          │  │  • app_id (FK) │  │  • name        │
+│  • username     │   │  • name          │  │  • url         │  │  • message     │
+│  • display_name │   │  • created_by(FK)│  │  • secret      │  │  • status      │
+│  • user_type    │   │  • is_frozen     │  │  • events[]    │  └────────────────┘
+│  • is_online    │   └─────────┬────────┘  └────────────────┘
 └────────┬────────┘             │
          │                      │
          │ 1:N                  │
@@ -300,6 +298,77 @@ APPLICATION LAYER
 │  • push_token   │             │
 │  • platform     │             │
 └─────────────────┘             │
+
+┌──────────────────┐
+│  applications    │
+│  ──────────────  │
+│  • id (PK)       │
+└────────┬─────────┘
+         │
+         │ 1:N
+         │
+┌────────▼─────────┐
+│    api_keys      │ ◄─── Publishable & Secret keys
+│  ──────────────  │
+│  • id (PK)       │
+│  • app_id (FK)   │
+│  • publishable_key│ (pk_chat_test_xxx)
+│  • secret_key    │ (sk_chat_test_xxx, hashed)
+│  • is_active     │
+└──────────────────┘
+
+
+RBAC (Role-Based Access Control)
+═════════════════════════════════
+
+┌──────────────────┐         ┌──────────────────┐
+│     members      │         │       roles      │
+│  ──────────────  │         │  ──────────────  │
+│  • id (PK)       │         │  • id (PK)       │
+│  • customer_id   │         │  • name          │
+└────────┬─────────┘         │  • scope         │ (PLATFORM/CUSTOMER/APP)
+         │                   │  • hierarchy_level│ (100=Super, 80=Owner, 60=Admin, 40=Dev, 20=Viewer)
+         │ N:M               └──────────┬───────┘
+         │                              │
+         │  ┌──────────────────────┐    │
+         └──► member_customer_roles│◄───┘ ◄─── Customer-level (Owner, Admin)
+            │  ──────────────────  │
+            │  • member_id (FK)    │
+            │  • customer_id (FK)  │
+            │  • role_id (FK)      │
+            └──────────────────────┘
+
+┌──────────────────┐         ┌──────────────────┐
+│     members      │         │  applications    │
+│  ──────────────  │         │  ──────────────  │
+│  • id (PK)       │         │  • id (PK)       │
+└────────┬─────────┘         └──────────┬───────┘
+         │                              │
+         │ N:M                          │
+         │                              │
+         │  ┌──────────────────────┐    │
+         └──► member_app_roles     │◄───┘ ◄─── App-level (Developer, Viewer)
+            │  ──────────────────  │
+            │  • member_id (FK)    │
+            │  • app_id (FK)       │
+            │  • role_id (FK)      │
+            └──────────────────────┘
+
+┌──────────────────┐         ┌──────────────────┐
+│       roles      │         │   permissions    │
+│  ──────────────  │         │  ──────────────  │
+│  • id (PK)       │         │  • id (PK)       │
+└────────┬─────────┘         │  • name          │
+         │                   └──────────┬───────┘
+         │ N:M                          │
+         │                              │
+         │  ┌──────────────────────┐    │
+         └──► role_permissions     │◄───┘
+            │  ──────────────────  │
+            │  • role_id (FK)      │
+            │  • permission_id (FK)│
+            │  • conditions (JSONB)│ ◄─── CASL conditions
+            └──────────────────────┘
 
 
 SDK LAYER (Chat Features)
@@ -375,15 +444,21 @@ MODERATION LAYER
 
 ### **Key Relationships:**
 
-**Portal Layer:**
-- `customer_users` (1) → (N) `refresh_tokens`
-- `customer_users` (N) → (M) `teams` via `customer_user_teams`
+**Core Hierarchy:**
+- `customers` (1) → (N) `members`
+- `customers` (1) → (N) `applications`
+- `members` (1) → (N) `refresh_tokens`
+
+**RBAC:**
+- `members` (N) → (M) `roles` via `member_customer_roles` (customer-level)
+- `members` (N) → (M) `roles` via `member_app_roles` (app-level)
+- `roles` (N) → (M) `permissions` via `role_permissions`
 
 **Application Layer:**
-- `teams` (1) → (1) `applications`
+- `applications` (1) → (N) `api_keys`
 - `applications` (1) → (N) `app_users`
 - `applications` (1) → (N) `channels`
-- `applications` (1) → (N) `webhooks`
+- `applications` (1) → (N) `webhook_endpoints`
 - `applications` (1) → (N) `campaigns`
 
 **SDK Layer (Chat):**
@@ -400,10 +475,12 @@ MODERATION LAYER
 - `messages` (1) → (N) `message_reads`
 
 **Important Notes:**
-- ✅ **customer_users** = Portal users (your customers)
+- ✅ **Customer → Member → App** hierarchy (aligned with Dropper)
+- ✅ **members** = Portal users who manage the platform
 - ✅ **app_users** = SDK end-users (your customers' users)
-- ✅ All chat features reference **app_users**, not customer_users
-- ✅ Moderation reviewed by **customer_users**
+- ✅ **RBAC** with customer-level and app-level roles
+- ✅ **api_keys** with publishable (client-safe) and secret (server-only) keys
+- ✅ **webhook_endpoints** with event arrays for flexible subscriptions
 - ✅ **external_id** in app_users maps to customer's user system
 
 ---

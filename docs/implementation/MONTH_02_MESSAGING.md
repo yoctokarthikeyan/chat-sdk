@@ -8,11 +8,13 @@
 
 ## 🔑 Important: SDK Users (App Users)
 
-In Month 1, we implemented **CustomerUser** for portal authentication. Now we're adding **AppUser** for SDK end-users who participate in chat.
+In Month 1, we implemented the **Customer → Member → App** hierarchy for portal management. Now we're adding **AppUser** for SDK end-users who participate in chat.
 
 **Key Differences:**
-- **CustomerUser**: Your customers who manage the portal (email/password login)
-- **AppUser**: Your customers' end-users who use the chat SDK (no portal access)
+- **Customer**: Organization/company account
+- **Member**: Portal users who manage the platform (email/password login)
+- **Application**: Chat app instances
+- **AppUser**: SDK end-users who use the chat (no portal access, identified by externalId)
 
 ---
 
@@ -297,7 +299,7 @@ model Application {
 ```
 
 **Note**: The complete schema now includes:
-- **CustomerUser** (Month 1) - Portal users
+- **Customer, Member, Application, ApiKey, RBAC** (Month 1) - Portal management
 - **AppUser** (Month 2) - SDK end-users  
 - **Channel**, **Message**, etc. - All reference AppUser
 

@@ -1,69 +1,286 @@
 # Chat SDK - Database Schema
 
-**Last Updated**: October 29, 2025  
-**Version**: 2.0 (Refactored with separated user types)
+**Last Updated**: November 3, 2025  
+**Version**: 3.0 (Aligned with Dropper hierarchical structure)
 
 ---
 
 ## Overview
 
-This schema separates two distinct user types:
-1. **customer_users** - Portal users who manage the platform (your customers)
-2. **app_users** - SDK end-users who participate in chat (your customers' users)
+This schema follows the **Customer → Member → App** hierarchy pattern:
+
+1. **Customer** - Organization/company account (your customers)
+2. **Member** - Portal users who manage the platform (belong to a Customer)
+3. **App** - Chat application instances (belong to a Customer)
+4. **AppUser** - SDK end-users who participate in chat (belong to an App)
+
+**Key Features:**
+- Role-Based Access Control (RBAC) with customer-level and app-level roles
+- API key management with publishable and secret keys
+- Webhook endpoints for event notifications
+- Multi-tenancy with proper data isolation
 
 ---
 
 ## PostgreSQL Schema
 
-### Portal Layer - Customer Users
+### Core Hierarchy
 
-#### **customer_users**
+#### **customers**
 ```sql
-CREATE TABLE customer_users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email VARCHAR(255) UNIQUE NOT NULL,
-  password_hash VARCHAR(255) NOT NULL,
-  display_name VARCHAR(255),
-  avatar_url TEXT,
-  is_email_verified BOOLEAN DEFAULT false,
-  email_verified_at TIMESTAMP,
-  is_active BOOLEAN DEFAULT true,
-  last_login_at TIMESTAMP,
+CREATE TABLE customers (
+  id VARCHAR(30) PRIMARY KEY, -- cuid
   created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+  updated_at TIMESTAMP DEFAULT NOW(),
+  
+  -- Customer information
+  name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  phone VARCHAR(50),
+  website VARCHAR(255),
+  
+  -- Billing information
+  billing_email VARCHAR(255),
+  billing_address TEXT,
+  tax_id VARCHAR(100),
+  
+  -- External integration (e.g., ChargeBee, Stripe)
+  external_billing_id VARCHAR(255) UNIQUE
 );
 
-CREATE INDEX idx_customer_users_email ON customer_users(email);
-CREATE INDEX idx_customer_users_active ON customer_users(is_active) WHERE is_active = true;
+CREATE INDEX idx_customers_email ON customers(email);
+CREATE INDEX idx_customers_external_billing_id ON customers(external_billing_id);
 ```
 
-#### **customer_user_teams**
+#### **members**
 ```sql
-CREATE TABLE customer_user_teams (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  customer_user_id UUID NOT NULL REFERENCES customer_users(id) ON DELETE CASCADE,
-  team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
-  role VARCHAR(50) NOT NULL DEFAULT 'member', -- 'owner', 'admin', 'member'
-  joined_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(customer_user_id, team_id)
+CREATE TABLE members (
+  id VARCHAR(30) PRIMARY KEY, -- cuid
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  
+  -- Member information
+  email VARCHAR(255) NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  password_hash VARCHAR(255),
+  avatar_url TEXT,
+  last_login_at TIMESTAMP,
+  is_active BOOLEAN DEFAULT true,
+  
+  -- Email verification
+  email_verified BOOLEAN DEFAULT false,
+  email_verification_token VARCHAR(255),
+  email_verification_expires TIMESTAMP,
+  
+  -- Password reset
+  password_reset_token VARCHAR(255),
+  password_reset_expires TIMESTAMP,
+  
+  -- Authentication
+  auth_provider VARCHAR(50), -- 'email', 'google', 'github', etc.
+  auth_provider_id VARCHAR(255),
+  
+  -- Super Admin flag (platform-wide access)
+  is_super_admin BOOLEAN DEFAULT false,
+  
+  -- Relationships
+  customer_id VARCHAR(30) NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  
+  UNIQUE(email, customer_id)
 );
 
-CREATE INDEX idx_customer_user_teams_user ON customer_user_teams(customer_user_id);
-CREATE INDEX idx_customer_user_teams_team ON customer_user_teams(team_id);
+CREATE INDEX idx_members_email ON members(email);
+CREATE INDEX idx_members_customer_id ON members(customer_id);
+CREATE INDEX idx_members_active ON members(is_active) WHERE is_active = true;
 ```
 
 #### **refresh_tokens**
 ```sql
 CREATE TABLE refresh_tokens (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  customer_user_id UUID NOT NULL REFERENCES customer_users(id) ON DELETE CASCADE,
+  id VARCHAR(30) PRIMARY KEY, -- cuid
+  created_at TIMESTAMP DEFAULT NOW(),
+  
+  -- Token information
   token VARCHAR(255) UNIQUE NOT NULL,
   expires_at TIMESTAMP NOT NULL,
-  created_at TIMESTAMP DEFAULT NOW()
+  is_revoked BOOLEAN DEFAULT false,
+  revoked_at TIMESTAMP,
+  
+  -- Device/session information
+  user_agent TEXT,
+  ip_address VARCHAR(45),
+  
+  -- Relationships
+  member_id VARCHAR(30) NOT NULL REFERENCES members(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(customer_user_id);
-CREATE INDEX idx_refresh_tokens_token ON refresh_tokens(token);
+CREATE INDEX idx_refresh_tokens_member_id ON refresh_tokens(member_id);
+CREATE INDEX idx_refresh_tokens_token_expires ON refresh_tokens(token, expires_at);
+```
+
+#### **applications**
+```sql
+CREATE TABLE applications (
+  id VARCHAR(30) PRIMARY KEY, -- cuid
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  
+  -- App information
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  
+  -- Environment configuration
+  environment VARCHAR(20) DEFAULT 'PRODUCTION', -- 'PRODUCTION', 'TEST'
+  
+  -- Settings
+  settings JSONB,
+  
+  -- Relationships
+  customer_id VARCHAR(30) NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  
+  UNIQUE(customer_id, name)
+);
+
+CREATE INDEX idx_applications_customer_id ON applications(customer_id);
+```
+
+---
+
+### API Key Management
+
+#### **api_keys**
+```sql
+CREATE TABLE api_keys (
+  id VARCHAR(30) PRIMARY KEY, -- cuid
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  
+  -- Key information
+  publishable_key VARCHAR(255) UNIQUE NOT NULL, -- pk_chat_test_xxx or pk_chat_live_xxx
+  secret_key VARCHAR(255) UNIQUE NOT NULL, -- sk_chat_test_xxx or sk_chat_live_xxx (hashed)
+  
+  -- Status
+  is_active BOOLEAN DEFAULT true,
+  last_used_at TIMESTAMP,
+  
+  -- Key rotation
+  expires_at TIMESTAMP,
+  
+  -- Relationships
+  app_id VARCHAR(30) NOT NULL REFERENCES applications(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_api_keys_app_id ON api_keys(app_id);
+CREATE INDEX idx_api_keys_publishable_key ON api_keys(publishable_key);
+CREATE INDEX idx_api_keys_secret_key ON api_keys(secret_key);
+
+COMMENT ON COLUMN api_keys.publishable_key IS 'Client-side key (safe to expose)';
+COMMENT ON COLUMN api_keys.secret_key IS 'Server-side key (must be kept secret, stored hashed)';
+```
+
+---
+
+### RBAC (Role-Based Access Control)
+
+#### **roles**
+```sql
+CREATE TABLE roles (
+  id VARCHAR(30) PRIMARY KEY, -- cuid
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  
+  -- Role information
+  name VARCHAR(100) UNIQUE NOT NULL,
+  description TEXT,
+  is_system_role BOOLEAN DEFAULT false,
+  
+  -- RBAC configuration
+  scope VARCHAR(20) DEFAULT 'APP', -- 'PLATFORM', 'CUSTOMER', 'APP'
+  hierarchy_level INTEGER DEFAULT 0 -- Higher = more powerful (100=Super Admin, 80=Owner, 60=Admin, 40=Developer, 20=Viewer)
+);
+
+CREATE INDEX idx_roles_scope ON roles(scope);
+
+COMMENT ON COLUMN roles.scope IS 'PLATFORM=Super Admin, CUSTOMER=Owner/Admin, APP=Developer/Viewer';
+COMMENT ON COLUMN roles.hierarchy_level IS '100=Super Admin, 80=Owner, 60=Admin, 40=Developer, 20=Viewer';
+```
+
+#### **permissions**
+```sql
+CREATE TABLE permissions (
+  id VARCHAR(30) PRIMARY KEY, -- cuid
+  created_at TIMESTAMP DEFAULT NOW(),
+  
+  -- Permission information
+  name VARCHAR(100) UNIQUE NOT NULL,
+  description TEXT
+);
+
+CREATE INDEX idx_permissions_name ON permissions(name);
+```
+
+#### **role_permissions**
+```sql
+CREATE TABLE role_permissions (
+  id VARCHAR(30) PRIMARY KEY, -- cuid
+  created_at TIMESTAMP DEFAULT NOW(),
+  
+  -- CASL conditions for Prisma WHERE clauses
+  conditions JSONB, -- Store CASL conditions for @casl/prisma
+  
+  -- Relationships
+  role_id VARCHAR(30) NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+  permission_id VARCHAR(30) NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
+  
+  UNIQUE(role_id, permission_id)
+);
+
+CREATE INDEX idx_role_permissions_role_id ON role_permissions(role_id);
+CREATE INDEX idx_role_permissions_permission_id ON role_permissions(permission_id);
+
+COMMENT ON COLUMN role_permissions.conditions IS 'Example: {"appId": {"in": "{{user.appIds}}"}}';
+```
+
+#### **member_customer_roles**
+```sql
+CREATE TABLE member_customer_roles (
+  id VARCHAR(30) PRIMARY KEY, -- cuid
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  
+  -- Relationships
+  member_id VARCHAR(30) NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  customer_id VARCHAR(30) NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  role_id VARCHAR(30) NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+  
+  UNIQUE(member_id, customer_id)
+);
+
+CREATE INDEX idx_member_customer_roles_member_id ON member_customer_roles(member_id);
+CREATE INDEX idx_member_customer_roles_customer_id ON member_customer_roles(customer_id);
+
+COMMENT ON TABLE member_customer_roles IS 'Customer-level role assignments (Owner, Admin)';
+```
+
+#### **member_app_roles**
+```sql
+CREATE TABLE member_app_roles (
+  id VARCHAR(30) PRIMARY KEY, -- cuid
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  
+  -- Relationships
+  member_id VARCHAR(30) NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  app_id VARCHAR(30) NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+  role_id VARCHAR(30) NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+  
+  UNIQUE(member_id, app_id, role_id)
+);
+
+CREATE INDEX idx_member_app_roles_member_id ON member_app_roles(member_id);
+CREATE INDEX idx_member_app_roles_app_id ON member_app_roles(app_id);
+
+COMMENT ON TABLE member_app_roles IS 'App-level role assignments (Developer, Viewer)';
 ```
 
 ---
@@ -73,8 +290,11 @@ CREATE INDEX idx_refresh_tokens_token ON refresh_tokens(token);
 #### **app_users**
 ```sql
 CREATE TABLE app_users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  app_id UUID NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+  id VARCHAR(30) PRIMARY KEY, -- cuid
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  
+  -- App user information
   external_id VARCHAR(255) NOT NULL, -- Customer's user ID
   username VARCHAR(255),
   display_name VARCHAR(255),
@@ -86,8 +306,10 @@ CREATE TABLE app_users (
   metadata JSONB DEFAULT '{}',
   is_online BOOLEAN DEFAULT false,
   last_seen_at TIMESTAMP,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
+  
+  -- Relationships
+  app_id VARCHAR(30) NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+  
   UNIQUE(app_id, external_id)
 );
 
@@ -284,102 +506,46 @@ CREATE INDEX idx_teams_app_id ON teams(app_id);
 CREATE TABLE message_drafts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
-  app_user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE, -- ✅ Changed
+  app_user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
   text TEXT,
   mentions JSONB DEFAULT '[]',
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(channel_id, app_user_id) -- ✅ Changed
+  UNIQUE(channel_id, app_user_id)
 );
 
-CREATE INDEX idx_drafts_user ON message_drafts(app_user_id); -- ✅ Changed
+CREATE INDEX idx_drafts_user ON message_drafts(app_user_id);
 ```
 
-#### **webhooks**
+---
+
+### Webhooks & Events
+
+#### **webhook_endpoints**
 ```sql
-CREATE TABLE webhooks (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  app_id UUID NOT NULL REFERENCES applications(id),
-  name VARCHAR(255) NOT NULL,
+CREATE TABLE webhook_endpoints (
+  id VARCHAR(30) PRIMARY KEY, -- cuid
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  
+  -- Webhook information
   url TEXT NOT NULL,
-  webhook_type VARCHAR(50) NOT NULL, -- 'before_message_send', 'push', 'custom_action'
-  secret VARCHAR(255), -- For signature verification
-  is_active BOOLEAN DEFAULT true,
-  retry_count INTEGER DEFAULT 3,
-  timeout_ms INTEGER DEFAULT 5000,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE INDEX idx_webhooks_app ON webhooks(app_id);
-CREATE INDEX idx_webhooks_type ON webhooks(webhook_type);
-```
-
-#### **webhook_event_types**
-```sql
-CREATE TABLE webhook_event_types (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  event_name VARCHAR(100) UNIQUE NOT NULL, -- 'message.new', 'message.updated', 'channel.created', etc.
-  category VARCHAR(50), -- 'message', 'channel', 'user', 'member', 'reaction', etc.
   description TEXT,
+  secret VARCHAR(255) NOT NULL, -- For signature verification
   is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMP DEFAULT NOW()
+  
+  -- Event types to trigger this webhook (array of event names)
+  events TEXT[], -- ['message.new', 'channel.created', 'user.joined', etc.]
+  
+  -- Relationships
+  app_id VARCHAR(30) NOT NULL REFERENCES applications(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_webhook_event_types_category ON webhook_event_types(category);
-CREATE INDEX idx_webhook_event_types_active ON webhook_event_types(is_active) WHERE is_active = true;
+CREATE INDEX idx_webhook_endpoints_app_id ON webhook_endpoints(app_id);
+CREATE INDEX idx_webhook_endpoints_active ON webhook_endpoints(is_active) WHERE is_active = true;
 
--- Pre-populate with standard event types
-INSERT INTO webhook_event_types (event_name, category, description) VALUES
-  ('message.new', 'message', 'Triggered when a new message is sent'),
-  ('message.updated', 'message', 'Triggered when a message is edited'),
-  ('message.deleted', 'message', 'Triggered when a message is deleted'),
-  ('channel.created', 'channel', 'Triggered when a channel is created'),
-  ('channel.updated', 'channel', 'Triggered when a channel is updated'),
-  ('channel.deleted', 'channel', 'Triggered when a channel is deleted'),
-  ('user.presence.changed', 'user', 'Triggered when user presence changes'),
-  ('user.banned', 'user', 'Triggered when a user is banned'),
-  ('user.updated', 'user', 'Triggered when user profile is updated'),
-  ('member.added', 'member', 'Triggered when a member is added to a channel'),
-  ('member.removed', 'member', 'Triggered when a member is removed from a channel'),
-  ('reaction.new', 'reaction', 'Triggered when a reaction is added'),
-  ('reaction.deleted', 'reaction', 'Triggered when a reaction is removed'),
-  ('typing.start', 'typing', 'Triggered when a user starts typing'),
-  ('typing.stop', 'typing', 'Triggered when a user stops typing');
-```
-
-#### **webhook_subscriptions**
-```sql
-CREATE TABLE webhook_subscriptions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  webhook_id UUID NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
-  event_type_id UUID NOT NULL REFERENCES webhook_event_types(id) ON DELETE CASCADE,
-  created_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(webhook_id, event_type_id)
-);
-
-CREATE INDEX idx_webhook_subs_webhook ON webhook_subscriptions(webhook_id);
-CREATE INDEX idx_webhook_subs_event_type ON webhook_subscriptions(event_type_id);
-
--- Composite index for efficient lookups
-CREATE INDEX idx_webhook_subs_lookup ON webhook_subscriptions(event_type_id, webhook_id);
-```
-
-#### **webhook_logs**
-```sql
-CREATE TABLE webhook_logs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  webhook_id UUID NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
-  event_type VARCHAR(100) NOT NULL,
-  payload JSONB,
-  response_status INTEGER,
-  response_body TEXT,
-  attempt_count INTEGER DEFAULT 1,
-  delivered_at TIMESTAMP,
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE INDEX idx_webhook_logs_webhook ON webhook_logs(webhook_id, created_at DESC);
+COMMENT ON COLUMN webhook_endpoints.secret IS 'Used for HMAC signature verification';
+COMMENT ON COLUMN webhook_endpoints.events IS 'Array of event types: message.new, channel.created, etc.';
 ```
 
 #### **campaigns**

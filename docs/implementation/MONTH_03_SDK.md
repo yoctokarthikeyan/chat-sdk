@@ -8,10 +8,11 @@
 
 ## 🔑 Important: SDK Users (App Users)
 
-The SDK represents **AppUser** (end-users who participate in chat), NOT **CustomerUser** (portal users).
+The SDK represents **AppUser** (end-users who participate in chat), NOT **Member** (portal users).
 
 **Key Points:**
-- SDK users are identified by `externalId` (your customer's user ID)
+- **Member**: Portal users who manage applications (Customer → Member → App hierarchy)
+- **AppUser**: SDK end-users identified by `externalId` (your customer's user ID)
 - No email/password authentication in SDK
 - Your customers create SDK users via their backend
 - All chat operations use `AppUser` model
